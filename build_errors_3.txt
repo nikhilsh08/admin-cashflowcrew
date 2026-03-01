@@ -1,0 +1,4 @@
+﻿src/components/Dashboard/Dashboard.tsx(818,20): error TS2552: Cannot find name 'CardDescription'. Did you mean 'AlertDescription'?
+src/components/Dashboard/Dashboard.tsx(828,21): error TS2552: Cannot find name 'CardDescription'. Did you mean 'AlertDescription'?
+src/components/Dashboard/DashBoardCard.tsx(7,28): error TS6196: 'User' is declared but never used.
+src/components/ImageManagement.tsx(6,1): error TS6133: 'Cookies' is declared but its value is never read.

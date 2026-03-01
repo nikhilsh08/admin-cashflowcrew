@@ -11,7 +11,7 @@ import { logout } from '@/_authContext/slice';
 import type { Transaction } from '@/hooks/__types';
 import { DesktopSidebar, MobileSidebar, SidebarProvider, useSidebar } from '../AdminSidebar';
 import type { Masterclass } from '@/hooks/__types';
-import { formatDate, formatCurrency, convertToIST, convertUTCToIST2 } from '@/lib/utils';
+import { formatDate, formatCurrency } from '@/lib/utils';
 import DashboardCard from './DashBoardCard';
 import { Alert, AlertDescription } from '../ui/alert';
 import { generateCompletionEmailBootcamp } from './temp';

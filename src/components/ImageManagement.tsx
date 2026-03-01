@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { UploadDropzone, UploadButton } from '../lib/uploadthing';
+import { UploadDropzone } from '../lib/uploadthing';
 import { Copy, Trash2, Images, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
-import Cookies from 'js-cookie';
+
 
 
 interface ImageRecord {
@@ -18,7 +18,7 @@ interface ImageRecord {
 const ImageManagement: React.FC = () => {
     const [images, setImages] = useState<ImageRecord[]>([]);
     const [loading, setLoading] = useState(true);
-    const [token,setToken] = useState("")
+    const [token, setToken] = useState("")
 
     const fetchImages = async () => {
         try {

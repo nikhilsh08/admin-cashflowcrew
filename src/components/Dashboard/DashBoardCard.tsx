@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import type { Transaction, User, Masterclass } from '@/hooks/__types';
+import type { Transaction, Masterclass } from '@/hooks/__types';
 import { formatCurrency, formatDate } from '@/lib/utils';
 // import { convertToIST } from '@/lib/utils'; // Removed as not used anymore
 
