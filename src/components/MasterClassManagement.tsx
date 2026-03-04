@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
-import { Plus, Edit, Save, X, ArrowLeft, Calendar, Clock, Users, DollarSign, MapPin, Eye } from "lucide-react";
+import { Plus, Edit, Save, X, ArrowLeft, Calendar, Clock, Users, DollarSign, MapPin, Eye, Download, ListChecks } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,8 @@ import { Badge } from "./ui/badge";
 import axios from "axios";
 import { toast } from "sonner";
 import { DateTimePicker } from "./ui/date-time-picker";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface Category {
     id: string;
@@ -45,11 +47,24 @@ interface Masterclass {
     date?: string;
 }
 
+interface WaitlistUser {
+    id: string;
+    email: string;
+    courseId: string;
+    status: string;
+    createdAt: string;
+}
+
 const MasterclassManagement = () => {
     const [view, setView] = useState<"list" | "form">("list");
     const [editingMasterclass, setEditingMasterclass] = useState<Masterclass | null>(null);
     const [masterclasses, setMasterclasses] = useState<Masterclass[]>([]);
-    console.log("masterclass...", masterclasses);
+
+    // Waitlist State
+    const [isWaitlistModalOpen, setIsWaitlistModalOpen] = useState(false);
+    const [waitlistUsers, setWaitlistUsers] = useState<WaitlistUser[]>([]);
+    const [selectedMasterclassName, setSelectedMasterclassName] = useState("");
+    const [isLoadingWaitlist, setIsLoadingWaitlist] = useState(false);
 
     const {
         register,
@@ -112,6 +127,51 @@ const MasterclassManagement = () => {
     useEffect(() => {
         getMasterClasses();
     }, []);
+
+    const fetchWaitlist = async (masterclassId: string, title: string) => {
+        setIsWaitlistModalOpen(true);
+        setSelectedMasterclassName(title);
+        setIsLoadingWaitlist(true);
+        try {
+            const res = await axios.get(`${import.meta.env.VITE_SERVER_URL}/api/admin/masterclass/${masterclassId}`, { withCredentials: true });
+            if (res.data.success && res.data.waitlist) {
+                setWaitlistUsers(res.data.waitlist.users || []);
+            } else {
+                setWaitlistUsers([]);
+            }
+        } catch (error) {
+            console.error("Error fetching waitlist:", error);
+            toast.error("Failed to load waitlist data");
+            setWaitlistUsers([]);
+        } finally {
+            setIsLoadingWaitlist(false);
+        }
+    };
+
+    const exportWaitlistCsv = () => {
+        if (waitlistUsers.length === 0) {
+            toast.error("No waitlist users to export");
+            return;
+        }
+
+        const headers = ["Email", "Status", "Joined At"];
+        const csvContent = [
+            headers.join(","),
+            ...waitlistUsers.map(user =>
+                `${user.email},${user.status},${new Date(user.createdAt).toLocaleString()}`
+            )
+        ].join("\n");
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.setAttribute("href", url);
+        link.setAttribute("download", `waitlist_${selectedMasterclassName.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
 
     const handleCreate = () => {
         setEditingMasterclass(null);
@@ -180,7 +240,7 @@ const MasterclassManagement = () => {
         if (editingMasterclass) {
             // update
             try {
-                const res = await axios.put(`${import.meta.env.VITE_SERVER_URL}/api/admin/masterclass/update/${editingMasterclass.id || editingMasterclass._id}`, payload, { withCredentials: true });
+                const res = await axios.patch(`${import.meta.env.VITE_SERVER_URL}/api/admin/masterclass/update/${editingMasterclass.id || editingMasterclass._id}`, payload, { withCredentials: true });
                 if (res.data.success) {
                     toast.success("Masterclass updated successfully");
                     getMasterClasses(); // Refresh list
@@ -567,6 +627,17 @@ const MasterclassManagement = () => {
                                             <Eye className="h-4 w-4" />
                                             View Dashboard
                                         </Button>
+                                        {masterclass.status === "Coming Soon" && (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => fetchWaitlist(masterclass.id || masterclass._id, masterclass.title)}
+                                                className="flex items-center gap-2 text-blue-600 hover:text-blue-700"
+                                            >
+                                                <ListChecks className="h-4 w-4" />
+                                                Waitlist
+                                            </Button>
+                                        )}
                                     </div>
                                 </div>
                             </CardContent>
@@ -590,6 +661,64 @@ const MasterclassManagement = () => {
                     )}
                 </div>
             </div>
+
+            {/* Waitlist Dialog */}
+            <Dialog open={isWaitlistModalOpen} onOpenChange={setIsWaitlistModalOpen}>
+                <DialogContent className="max-w-2xl">
+                    <DialogHeader className="flex flex-row items-start justify-between">
+                        <div>
+                            <DialogTitle>Waitlist: {selectedMasterclassName}</DialogTitle>
+                            <DialogDescription>
+                                {waitlistUsers.length} user(s) are currently on the waitlist.
+                            </DialogDescription>
+                        </div>
+                        {waitlistUsers.length > 0 && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={exportWaitlistCsv}
+                                className="flex items-center gap-2 mt-0"
+                            >
+                                <Download className="h-4 w-4" />
+                                Export CSV
+                            </Button>
+                        )}
+                    </DialogHeader>
+
+                    <div className="mt-4">
+                        {isLoadingWaitlist ? (
+                            <div className="py-8 text-center text-muted-foreground">Loading waitlist data...</div>
+                        ) : waitlistUsers.length === 0 ? (
+                            <div className="py-8 text-center text-muted-foreground">No users on the waitlist yet.</div>
+                        ) : (
+                            <div className="border rounded-md">
+                                <div className="grid grid-cols-3 bg-muted p-3 text-sm font-medium rounded-t-md">
+                                    <div className="col-span-1">Email</div>
+                                    <div className="col-span-1 text-center">Status</div>
+                                    <div className="col-span-1 text-right">Joined At</div>
+                                </div>
+                                <ScrollArea className="h-[300px]">
+                                    {waitlistUsers.map((user) => (
+                                        <div key={user.id} className="grid grid-cols-3 p-3 text-sm border-t items-center">
+                                            <div className="col-span-1 font-medium truncate pr-2" title={user.email}>
+                                                {user.email}
+                                            </div>
+                                            <div className="col-span-1 text-center">
+                                                <Badge variant="outline" className={user.status === 'PENDING' ? 'bg-yellow-100 text-yellow-800' : ''}>
+                                                    {user.status}
+                                                </Badge>
+                                            </div>
+                                            <div className="col-span-1 text-right text-muted-foreground whitespace-nowrap">
+                                                {new Date(user.createdAt).toLocaleDateString()}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </ScrollArea>
+                            </div>
+                        )}
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 };

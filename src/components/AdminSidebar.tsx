@@ -14,7 +14,6 @@ import {
   Map,
   BarChart3,
   Menu,
-  Mail,
   ChevronLeft,
   ChevronRight,
   BadgeDollarSign,
@@ -81,11 +80,6 @@ const navMain = [
     title: "Coupons",
     url: "/admin/coupons",
     icon: BadgeDollarSign,
-  },
-  {
-    title: "Email Templates",
-    url: "/admin/emails",
-    icon: Mail,
   },
   {
     title: "Categories",
@@ -433,7 +427,7 @@ export const MobileSidebar = ({ user, onLogout, onNavigate }: MobileSidebarProps
 
   return (
     <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger>
+      <SheetTrigger asChild>
         <Button variant="ghost" size="icon" className="md:hidden">
           <Menu className="h-5 w-5" />
           <span className="sr-only">Toggle navigation menu</span>

@@ -10,12 +10,13 @@ import { Badge } from "./ui/badge";
 import { Switch } from "./ui/switch";
 import axios from "axios";
 import { toast } from "sonner";
+import { DateTimePicker } from "./ui/date-time-picker";
 
 interface Coupon {
     id: string;
     code: string;
     discount: number;
-    discountType: 'percentage' | 'fixed';
+    discountType: 'PERCENTAGE' | 'FIXED';
     expiryDate: string;
     usageLimit?: number | null;
     usedCount: number;
@@ -25,7 +26,7 @@ interface Coupon {
     description?: string;
     isEnabled: boolean;
     createdAt: string;
-    updatedAt: string;
+    updatedAt?: string;
 }
 
 interface Course {
@@ -40,6 +41,7 @@ const CouponManagement = () => {
     const [courses, setCourses] = useState<Course[]>([]);
     const [isEnabled, setIsEnabled] = useState<boolean>(true);
     const [applicableTo, setApplicableTo] = useState<"all" | "specific">("all");
+    const [expiryDate, setExpiryDate] = useState<Date | undefined>(undefined);
 
     const {
         register,
@@ -51,8 +53,7 @@ const CouponManagement = () => {
         defaultValues: {
             code: "",
             discount: 0,
-            discountType: "percentage",
-            expiryDate: "",
+            discountType: "PERCENTAGE",
             usageLimit: undefined,
             minAmount: 0,
             maxDiscount: undefined,
@@ -66,8 +67,8 @@ const CouponManagement = () => {
 
     const getCoupons = async () => {
         try {
-            const res = await axios.get(`${import.meta.env.VITE_SERVER_URL}/api/admin/coupons/all`, { withCredentials: true });
-            setCoupons(res.data.coupons || []);
+            const res = await axios.get(`${import.meta.env.VITE_SERVER_URL}/api/admin/coupons`, { withCredentials: true });
+            setCoupons(Array.isArray(res.data) ? res.data : res.data.coupons || []);
         } catch (error) {
             console.error("Error fetching coupons:", error);
             toast.error("Failed to fetch coupons");
@@ -96,8 +97,7 @@ const CouponManagement = () => {
         reset({
             code: "",
             discount: 0,
-            discountType: "percentage",
-            expiryDate: "",
+            discountType: "PERCENTAGE",
             usageLimit: undefined,
             minAmount: 0,
             maxDiscount: undefined,
@@ -106,6 +106,7 @@ const CouponManagement = () => {
             isEnabled: true,
         });
         setIsEnabled(true);
+        setExpiryDate(undefined);
         setApplicableTo("all");
         setView("form");
     };
@@ -114,35 +115,43 @@ const CouponManagement = () => {
         setEditingCoupon(coupon);
         reset(coupon);
         setIsEnabled(coupon.isEnabled);
+        setExpiryDate(coupon.expiryDate ? new Date(coupon.expiryDate) : undefined);
         setApplicableTo(coupon.applicableCourseIds && coupon.applicableCourseIds.length > 0 ? "specific" : "all");
         setView("form");
     };
 
     const onSubmit = async (data: Partial<Coupon>) => {
+        if (!expiryDate) {
+            toast.error("Please select an expiry date");
+            return;
+        }
         const submitData = {
-
             ...data,
             isEnabled,
-            // Convert empty strings to null for optional number fields
-            usageLimit: data.usageLimit ? Number(data.usageLimit) : null,
-            maxDiscount: data.maxDiscount ? Number(data.maxDiscount) : null,
+            expiryDate: expiryDate.toISOString(),
+            usageLimit: data.usageLimit ? Number(data.usageLimit) : undefined,
+            maxDiscount: data.maxDiscount ? Number(data.maxDiscount) : undefined,
             discount: Number(data.discount),
             minAmount: Number(data.minAmount) || 0,
-            // If "all" is selected, send empty array. If "specific", send the selected IDs.
             applicableCourseIds: applicableTo === "all" ? [] : (Array.isArray(data.applicableCourseIds) ? data.applicableCourseIds : [])
         };
 
         try {
             if (editingCoupon) {
-                await axios.patch(
-                    `${import.meta.env.VITE_SERVER_URL}/api/admin/coupon`,
-                    { ...submitData, id: editingCoupon.id },
+                // No full-update endpoint — delete and recreate
+                await axios.delete(
+                    `${import.meta.env.VITE_SERVER_URL}/api/admin/coupons/${editingCoupon.id}`,
+                    { withCredentials: true }
+                );
+                await axios.post(
+                    `${import.meta.env.VITE_SERVER_URL}/api/admin/coupons`,
+                    submitData,
                     { withCredentials: true }
                 );
                 toast.success("Coupon updated successfully!");
             } else {
                 await axios.post(
-                    `${import.meta.env.VITE_SERVER_URL}/api/admin/coupon`,
+                    `${import.meta.env.VITE_SERVER_URL}/api/admin/coupons`,
                     submitData,
                     { withCredentials: true }
                 );
@@ -152,8 +161,23 @@ const CouponManagement = () => {
             setView("list");
         } catch (error: any) {
             console.error("Error saving coupon:", error);
-            const errorMessage = error.response?.data?.message || "Failed to save coupon. Please try again.";
+            const errorMessage = error.response?.data?.error || error.response?.data?.message || "Failed to save coupon. Please try again.";
             toast.error(errorMessage);
+        }
+    };
+
+    const handleToggle = async (coupon: Coupon) => {
+        try {
+            await axios.patch(
+                `${import.meta.env.VITE_SERVER_URL}/api/admin/coupons/${coupon.id}`,
+                { isEnabled: !coupon.isEnabled },
+                { withCredentials: true }
+            );
+            toast.success(`Coupon ${!coupon.isEnabled ? 'enabled' : 'disabled'} successfully!`);
+            getCoupons();
+        } catch (error) {
+            console.error("Error toggling coupon:", error);
+            toast.error("Failed to toggle coupon status");
         }
     };
 
@@ -161,9 +185,7 @@ const CouponManagement = () => {
         if (!window.confirm("Are you sure you want to delete this coupon?")) return;
 
         try {
-            // Note: Check if your delete endpoint expects ID in body or URL. 
-            // Assuming standard REST pattern:
-            await axios.delete(`${import.meta.env.VITE_SERVER_URL}/api/admin/coupon?id=${couponId}`, { withCredentials: true });
+            await axios.delete(`${import.meta.env.VITE_SERVER_URL}/api/admin/coupons/${couponId}`, { withCredentials: true });
             toast.success("Coupon deleted successfully!");
             getCoupons();
         } catch (error) {
@@ -181,7 +203,7 @@ const CouponManagement = () => {
     };
 
     const formatDiscount = (discount: number, type: string) => {
-        return type === 'percentage' ? `${discount}%` : `₹${discount}`;
+        return type === 'PERCENTAGE' ? `${discount}%` : `₹${discount}`;
     };
 
     const getStatusColor = (coupon: Coupon) => {
@@ -252,8 +274,8 @@ const CouponManagement = () => {
                                     <div>
                                         <Label className="py-1">Discount Type *</Label>
                                         <select {...register("discountType")} className="w-full border rounded px-3 py-2">
-                                            <option value="percentage">Percentage (%)</option>
-                                            <option value="fixed">Fixed Amount (₹)</option>
+                                            <option value="PERCENTAGE">Percentage (%)</option>
+                                            <option value="FIXED">Fixed Amount (₹)</option>
                                         </select>
                                     </div>
                                 </div>
@@ -262,17 +284,17 @@ const CouponManagement = () => {
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
                                         <Label className="py-1">
-                                            Discount Value * {discountType === 'percentage' ? '(%)' : '(₹)'}
+                                            Discount Value * {discountType === 'PERCENTAGE' ? '(%)' : '(₹)'}
                                         </Label>
                                         <Input
                                             type="number"
                                             {...register("discount", { required: "Discount is required" })}
                                             min="0"
-                                            max={discountType === 'percentage' ? "100" : undefined}
+                                            max={discountType === 'PERCENTAGE' ? "100" : undefined}
                                         />
                                         {errors.discount && <p className="text-red-500 text-sm">{errors.discount.message}</p>}
                                     </div>
-                                    {discountType === 'percentage' && (
+                                    {discountType === 'PERCENTAGE' && (
                                         <div>
                                             <Label className="py-1">Maximum Discount Amount (₹)</Label>
                                             <Input
@@ -299,11 +321,11 @@ const CouponManagement = () => {
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
                                         <Label className="py-1">Expiry Date *</Label>
-                                        <Input
-                                            type="date"
-                                            {...register("expiryDate", { required: "Expiry date is required" })}
+                                        <DateTimePicker
+                                            date={expiryDate}
+                                            setDate={setExpiryDate}
                                         />
-                                        {errors.expiryDate && <p className="text-red-500 text-sm">{errors.expiryDate.message}</p>}
+                                        {!expiryDate && <p className="text-red-500 text-sm mt-1">Expiry date is required</p>}
                                     </div>
                                     <div>
                                         <Label className="py-1">Usage Limit</Label>
@@ -507,7 +529,7 @@ const CouponManagement = () => {
                                         </div>
 
                                         <div className="flex flex-wrap items-center gap-4 text-sm">
-                                            <span>Type: {coupon.discountType === 'percentage' ? 'Percentage' : 'Fixed Amount'}</span>
+                                            <span>Type: {coupon.discountType === 'PERCENTAGE' ? 'Percentage' : 'Fixed Amount'}</span>
                                             <span>Applies to: {coupon.applicableCourseIds.length > 0 ? `${coupon.applicableCourseIds.length} Courses` : 'All Courses'}</span>
                                             {coupon.maxDiscount && (
                                                 <span>Max discount: ₹{coupon.maxDiscount}</span>
@@ -516,6 +538,14 @@ const CouponManagement = () => {
                                     </div>
 
                                     <div className="flex gap-2">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => handleToggle(coupon)}
+                                            className="flex items-center gap-2"
+                                        >
+                                            {coupon.isEnabled ? 'Disable' : 'Enable'}
+                                        </Button>
                                         <Button
                                             variant="outline"
                                             size="sm"
