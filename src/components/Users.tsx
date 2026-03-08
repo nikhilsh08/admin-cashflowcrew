@@ -443,7 +443,7 @@ const Dashboard: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<User[]>([]);
-  const [transactions, setTransactions] = useState<TransactionData | null>(null);
+  const [, setTransactions] = useState<TransactionData | null>(null);
   const [stats, setStats] = useState<DashboardStats>({
     completedPayments: 0,
     pendingPayments: 0,
@@ -488,30 +488,6 @@ const Dashboard: React.FC = () => {
     }
   }, [users, debouncedSearchTerm]);
 
-  // Filter transactions based on search term
-  const filteredTransactions = useMemo(() => {
-    if (!transactions) return { success: [], failed: [], all: [] };
-
-    if (!debouncedTransactionSearchTerm) {
-      return {
-        success: transactions.transactionsuccess,
-        failed: transactions.transactionfailed,
-        all: transactions.allTransaction
-      };
-    }
-
-    const filterTransaction = (transaction: Transaction) =>
-      (transaction.userId?.email || '').toLowerCase().includes(debouncedTransactionSearchTerm.toLowerCase()) ||
-      (transaction.userId?.firstName || '').toLowerCase().includes(debouncedTransactionSearchTerm.toLowerCase()) ||
-      (transaction.userId?.lastName || '').toLowerCase().includes(debouncedTransactionSearchTerm.toLowerCase()) ||
-      (transaction.state || '').toLowerCase().includes(debouncedTransactionSearchTerm.toLowerCase());
-
-    return {
-      success: transactions.transactionsuccess.filter(filterTransaction),
-      failed: transactions.transactionfailed.filter(filterTransaction),
-      all: transactions.allTransaction.filter(filterTransaction)
-    };
-  }, [transactions, debouncedTransactionSearchTerm]);
 
   const fetchDashboardData = useCallback(async () => {
     try {
@@ -723,7 +699,6 @@ const Dashboard: React.FC = () => {
 
   // Overview Tab Content
   const getChartDataByPeriod = useCallback((data: TrendData[]) => {
-    const length = data.length;
     switch (chartPeriod) {
       case '7d':
         return data.slice(-7);
