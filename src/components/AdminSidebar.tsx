@@ -18,6 +18,7 @@ import {
   ChevronRight,
   BadgeDollarSign,
   Images,
+  FileText,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Button } from './ui/button';
@@ -91,7 +92,11 @@ const navMain = [
     url: "/admin/images",
     icon: Images,
   },
-
+  {
+    title: "Blogs",
+    url: "/admin/blogs",
+    icon: FileText,
+  },
 ];
 
 const projects = [

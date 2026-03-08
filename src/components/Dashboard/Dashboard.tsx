@@ -678,7 +678,7 @@ Website: https://cashflowcrew.in | Email: support@cashflowcrew.in`);
               </CardHeader>
               <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
                 <div className="text-lg sm:text-2xl font-bold">
-                  {(filteredData?.totalSuccess || 0) + (filteredData?.totalFailed || 0)}
+                  {(filteredData?.totalSuccess || 0) + (filteredData?.totalFailed || 0) + (filteredData?.unproccessedTransactionCount || 0)}
                 </div>
                 <Badge variant="secondary" className="mt-1 sm:mt-2 bg-purple-100 text-purple-800 text-xs">
                   {selectedWeek !== 'all-weeks' ? 'Filtered' : 'All Users'}

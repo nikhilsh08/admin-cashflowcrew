@@ -216,25 +216,29 @@ const MasterclassManagement = () => {
     };
 
     const onSubmit = async (data: Partial<Masterclass>) => {
+        // Helper: treat empty strings as null (not undefined) so the backend
+        // receives the field and clears it in the DB. Using `|| undefined` would
+        // drop the field from the JSON body entirely, leaving the old value untouched.
+        const nullIfEmpty = (val?: string) => (val && val.trim() !== '' ? val : null);
+
         const payload = {
             title: data.title,
-            subHeading: data.subHeading || undefined,
+            subHeading: nullIfEmpty(data.subHeading),
             description: data.description,
-            status: data.status || "Coming Soon",
+            status: data.status || 'Coming Soon',
             price: Number(data.price),
-            originalPrice: data.originalPrice ? Number(data.originalPrice) : undefined,
-            thumbnail: data.thumbnail || undefined,
+            originalPrice: data.originalPrice ? Number(data.originalPrice) : null,
+            thumbnail: nullIfEmpty(data.thumbnail),
             type: data.type,
             tcCourseId: data.tcCourseId,
-            tcCourseUrl: data.tcCourseUrl || undefined,
-            // Format the date precisely depending on payload needs (ensuring string is valid standard date object format or ISO payload)
-            startDate: data.startDate ? new Date(data.startDate).toISOString() : undefined,
-            maxSeats: data.maxSeats ? Number(data.maxSeats) : undefined,
+            tcCourseUrl: nullIfEmpty(data.tcCourseUrl),
+            startDate: data.startDate ? new Date(data.startDate).toISOString() : null,
+            maxSeats: data.maxSeats ? Number(data.maxSeats) : null,
             categoryId: data.categoryId,
-            staticRoute: data.staticRoute || undefined,
-            visibility: data.visibility || "show",
+            staticRoute: nullIfEmpty(data.staticRoute),
+            visibility: data.visibility || 'show',
             isPublished: typeof data.isPublished === 'string' ? data.isPublished === 'true' : (data.isPublished ?? true),
-            duration: (data.type === 'LIVE' || data.type === 'HYBRID') ? (data.duration || undefined) : undefined,
+            duration: (data.type === 'LIVE' || data.type === 'HYBRID') ? (nullIfEmpty(data.duration)) : null,
         };
 
         if (editingMasterclass) {

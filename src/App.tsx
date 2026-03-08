@@ -16,6 +16,8 @@ import Dashboard from "./components/Dashboard/Dashboard";
 import EmailTemplate from "./components/EmailTemplate";
 import OrderDetails from "./components/OrderDetails";
 import ImageManagement from "./components/ImageManagement";
+import BlogsManagement from "./components/BlogsManagement";
+import BlogFormPage from "./components/BlogFormPage";
 
 import AdminLayout from "./components/AdminLayout";
 
@@ -83,6 +85,13 @@ const AppContent: React.FC = () => {
             <ImageManagement />
           </AdminLayout>
         } />
+        <Route path="/admin/blogs" element={
+          <AdminLayout title="Blogs Management">
+            <BlogsManagement />
+          </AdminLayout>
+        } />
+        <Route path="/admin/blogs/new" element={<BlogFormPage />} />
+        <Route path="/admin/blogs/edit/:id" element={<BlogFormPage />} />
         <Route path="/admin/orders/:id" element={
           <AdminLayout title="Order Details">
             <OrderDetails />

@@ -351,7 +351,7 @@ const UserCard = React.memo<{ user: User }>(({ user }) => {
 });
 
 // Memoized Transaction Card Component
-const TransactionCard = React.memo<{ transaction: Transaction }>(({ transaction }) => {
+const TransactionCard = React.memo<{ transaction: Transaction; isSuccess?: boolean }>(({ transaction, isSuccess: isSuccessProp }) => {
   const formatDate = useCallback((dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-GB', {
       day: '2-digit',
@@ -360,7 +360,7 @@ const TransactionCard = React.memo<{ transaction: Transaction }>(({ transaction 
     });
   }, []);
 
-  const isSuccess = transaction.state === "COMPLETED";
+  const isSuccess = isSuccessProp ?? (transaction.state === "COMPLETED");
 
   return (
     <div className={`flex items-center justify-between p-4 border rounded-lg mb-4 ${isSuccess ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'
@@ -453,11 +453,19 @@ const Dashboard: React.FC = () => {
   const [trendsData, setTrendsData] = useState<TrendData[]>([]);
   const [paymentAnalytics, setPaymentAnalytics] = useState<PaymentAnalytics | null>(null);
   const [, setSessionStats] = useState<SessionStats | null>(null);
+  const [reportsStats, setReportsStats] = useState<DashboardStats>({
+    completedPayments: 0,
+    pendingPayments: 0,
+    totalRevenue: 0,
+    totalRegistrations: 0
+  });
+  const [reportsTransactions, setReportsTransactions] = useState<TransactionData | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [transactionSearchTerm, setTransactionSearchTerm] = useState('');
   const [refreshing, setRefreshing] = useState(false);
   const [chartPeriod, setChartPeriod] = useState('7d');
+  const [reportsPeriod, setReportsPeriod] = useState('7d');
 
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
   const debouncedTransactionSearchTerm = useDebounce(transactionSearchTerm, 500);
@@ -511,21 +519,89 @@ const Dashboard: React.FC = () => {
 
       // Corrected API endpoints based on your backend routes
       const [statsResponse, usersResponse, transactionsResponse, trendsResponse, paymentResponse, sessionResponse, ordersResponse] = await Promise.all([
-        axios.get(`${import.meta.env.VITE_SERVER_URL}/api/admin/dashboard-stats`, { withCredentials: true }),
+        axios.get(`${import.meta.env.VITE_SERVER_URL}/api/admin/dashboard-stats`, { 
+          params: { period: chartPeriod },
+          withCredentials: true 
+        }),
         axios.get(`${import.meta.env.VITE_SERVER_URL}/api/admin/users-with-all-transactions`, { withCredentials: true }), // Fixed endpoint
-        axios.get(`${import.meta.env.VITE_SERVER_URL}/api/admin/all-users-transaction`, { withCredentials: true }), // Fixed endpoint
+        axios.get(`${import.meta.env.VITE_SERVER_URL}/api/admin/all-users-transaction`, { 
+          params: { period: chartPeriod },
+          withCredentials: true 
+        }), // Fixed endpoint
         axios.get(`${import.meta.env.VITE_SERVER_URL}/api/admin/registration-trends`, {
           params: { period: chartPeriod },
           withCredentials: true
         }),
-        axios.get(`${import.meta.env.VITE_SERVER_URL}/api/admin/payment-analytics`, { withCredentials: true }),
+        axios.get(`${import.meta.env.VITE_SERVER_URL}/api/admin/payment-analytics`, { 
+          params: { period: chartPeriod },
+          withCredentials: true 
+        }),
         axios.get(`${import.meta.env.VITE_SERVER_URL}/api/admin/session-analytics`, { withCredentials: true }),
         axios.get(`${import.meta.env.VITE_SERVER_URL}/api/admin/orders`, { withCredentials: true })
       ]);
+      console.log( usersResponse)
 
-      if (statsResponse.data.success) setStats(statsResponse.data.stats);
-      if (usersResponse.data.success) setUsers(usersResponse.data.users);
-      if (transactionsResponse.data.success) setTransactions(transactionsResponse.data);
+      // Process stats response
+      const baseStats = statsResponse.data.success ? statsResponse.data.stats : {
+        completedPayments: 0,
+        pendingPayments: 0,
+        totalRevenue: 0,
+        totalRegistrations: 0
+      };
+
+      // Users will be set after merging with unprocessed below
+
+      if (transactionsResponse.data.success) {
+        setTransactions(transactionsResponse.data);
+
+        // Compute cutoff date for period filtering (client-side, since backend ignores period param)
+        const now = new Date();
+        const periodDays: Record<string, number> = { '7d': 7, '30d': 30, '90d': 90, '1y': 365 };
+        const cutoff = new Date(now);
+        cutoff.setDate(cutoff.getDate() - (periodDays[chartPeriod] ?? 7));
+
+        const filterByPeriod = (txList: Transaction[]) =>
+          txList.filter(t => t.createdAt && new Date(t.createdAt) >= cutoff);
+
+        const filteredSuccess = filterByPeriod(transactionsResponse.data.transactionsuccess || []);
+        const filteredFailed = filterByPeriod(transactionsResponse.data.transactionfailed || []);
+        const filteredUnprocessed = (transactionsResponse.data.unproccessedTransaction || []).filter(
+          (o: any) => o.createdAt && new Date(o.createdAt) >= cutoff
+        );
+
+        const totalRevenueFromTransactions = filteredSuccess.reduce((sum: number, t: Transaction) => sum + (t.amount || 0), 0);
+        const unprocessedCount = filteredUnprocessed.length;
+
+        setStats({
+          completedPayments: filteredSuccess.length,
+          pendingPayments: filteredFailed.length,
+          totalRevenue: totalRevenueFromTransactions,
+          totalRegistrations: filteredSuccess.length + filteredFailed.length + unprocessedCount
+        });
+
+        // Merge unprocessed users into the users list so all 5 show up in the Users tab
+        const unprocessedUsers: User[] = (transactionsResponse.data.unproccessedTransaction || []).map((item: any) => ({
+          _id: item.id || item._id || String(Math.random()),
+          name: item.guestName || (item.lead?.name) || 'Guest',
+          email: item.guestEmail || item.email || '',
+          phone: item.guestPhone || item.phone || '',
+          createdAt: item.createdAt,
+          role: 'UNPROCESSED',
+          transaction: false,
+          transactionStatus: 'PENDING',
+        }));
+        if (usersResponse.data.success) {
+          const existingEmails = new Set((usersResponse.data.users || []).map((u: User) => u.email));
+          const newUnprocessed = unprocessedUsers.filter(u => u.email && !existingEmails.has(u.email));
+          setUsers([...(usersResponse.data.users || []), ...newUnprocessed]);
+        } else {
+          setUsers(unprocessedUsers);
+        }
+      } else {
+        setStats(baseStats);
+        if (usersResponse.data.success) setUsers(usersResponse.data.users);
+      }
+
       if (trendsResponse.data.success) setTrendsData(trendsResponse.data.trends);
       if (paymentResponse.data.success) setPaymentAnalytics(paymentResponse.data.analytics);
       if (sessionResponse.data.success) setSessionStats(sessionResponse.data.stats);
@@ -547,6 +623,49 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
     fetchDashboardData();
   }, [fetchDashboardData]);
+
+  // Fetch reports stats based on reportsPeriod
+  useEffect(() => {
+    const fetchReportsStats = async () => {
+      try {
+        const [statsResponse, transactionsResponse] = await Promise.all([
+          axios.get(`${import.meta.env.VITE_SERVER_URL}/api/admin/dashboard-stats`, { 
+            params: { period: reportsPeriod },
+            withCredentials: true 
+          }),
+          axios.get(`${import.meta.env.VITE_SERVER_URL}/api/admin/all-users-transaction`, { 
+            params: { period: reportsPeriod },
+            withCredentials: true 
+          })
+        ]);
+
+        if (statsResponse.data.success) {
+          const baseStats = statsResponse.data.stats;
+          
+          if (transactionsResponse.data.success) {
+            setReportsTransactions(transactionsResponse.data);
+            
+            const totalRevenueFromTransactions = transactionsResponse.data.transactionsuccess.reduce((sum: number, t: Transaction) => {
+              return sum + (t.amount || 0);
+            }, 0);
+            
+            setReportsStats({
+              completedPayments: transactionsResponse.data.totalSuccess || baseStats.completedPayments,
+              pendingPayments: transactionsResponse.data.totalFailed || baseStats.pendingPayments,
+              totalRevenue: totalRevenueFromTransactions || baseStats.totalRevenue,
+              totalRegistrations: baseStats.totalRegistrations || 0
+            });
+          } else {
+            setReportsStats(baseStats);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching reports stats:', error);
+      }
+    };
+
+    fetchReportsStats();
+  }, [reportsPeriod]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -603,8 +722,39 @@ const Dashboard: React.FC = () => {
   };
 
   // Overview Tab Content
+  const getChartDataByPeriod = useCallback((data: TrendData[]) => {
+    const length = data.length;
+    switch (chartPeriod) {
+      case '7d':
+        return data.slice(-7);
+      case '30d':
+        return data.slice(-30);
+      case '90d':
+        return data.slice(-90);
+      case '1y':
+        return data;
+      default:
+        return data.slice(-7);
+    }
+  }, [chartPeriod]);
+
   const OverviewTab = useMemo(() => (
     <div className="space-y-6">
+      {/* Duration Selector */}
+      <div className="flex justify-end">
+        <Select value={chartPeriod} onValueChange={setChartPeriod}>
+          <SelectTrigger className="w-40">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="7d">Last 7 Days</SelectItem>
+            <SelectItem value="30d">Last 30 Days</SelectItem>
+            <SelectItem value="90d">Last 90 Days</SelectItem>
+            <SelectItem value="1y">Last Year</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card>
@@ -684,7 +834,7 @@ const Dashboard: React.FC = () => {
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={trendsData.slice(-7)}>
+              <LineChart data={getChartDataByPeriod(trendsData)}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="date" />
                 <YAxis />
@@ -706,7 +856,7 @@ const Dashboard: React.FC = () => {
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={trendsData.slice(-7)}>
+              <LineChart data={getChartDataByPeriod(trendsData)}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="date" />
                 <YAxis />
@@ -723,7 +873,7 @@ const Dashboard: React.FC = () => {
         </Card>
       </div>
     </div>
-  ), [stats, trendsData]);
+  ), [stats, trendsData, chartPeriod, getChartDataByPeriod]);
 
   // Users Tab Content
   const UsersTab = useMemo(() => (
@@ -837,8 +987,121 @@ const Dashboard: React.FC = () => {
   ), [orders, navigate]);
 
   // Reports Tab Content
+  const filteredReportsTransactions = useMemo(() => {
+    if (!reportsTransactions) return { success: [], failed: [], all: [] };
+
+    if (!debouncedTransactionSearchTerm) {
+      return {
+        success: reportsTransactions.transactionsuccess,
+        failed: reportsTransactions.transactionfailed,
+        all: reportsTransactions.allTransaction
+      };
+    }
+
+    const filterTransaction = (transaction: Transaction) =>
+      (transaction.userId?.email || '').toLowerCase().includes(debouncedTransactionSearchTerm.toLowerCase()) ||
+      (transaction.userId?.firstName || '').toLowerCase().includes(debouncedTransactionSearchTerm.toLowerCase()) ||
+      (transaction.userId?.lastName || '').toLowerCase().includes(debouncedTransactionSearchTerm.toLowerCase()) ||
+      (transaction.state || '').toLowerCase().includes(debouncedTransactionSearchTerm.toLowerCase());
+
+    return {
+      success: reportsTransactions.transactionsuccess.filter(filterTransaction),
+      failed: reportsTransactions.transactionfailed.filter(filterTransaction),
+      all: reportsTransactions.allTransaction.filter(filterTransaction)
+    };
+  }, [reportsTransactions, debouncedTransactionSearchTerm]);
+
+  const exportReportsCSV = useCallback(() => {
+    if (!reportsTransactions) return;
+    const allTx = [
+      ...reportsTransactions.transactionsuccess.map(t => ({ ...t, type: 'Success' })),
+      ...reportsTransactions.transactionfailed.map(t => ({ ...t, type: 'Failed' })),
+    ];
+    const headers = ['Name', 'Email', 'Status', 'Type', 'Amount', 'Currency', 'Date'];
+    const rows = allTx.map(t => [
+      `${t.userId?.firstName || ''} ${t.userId?.lastName || ''}`.trim() || 'Guest',
+      t.userId?.email || '',
+      t.state,
+      t.type,
+      t.amount || '',
+      t.currency || 'INR',
+      t.createdAt ? new Date(t.createdAt).toLocaleString() : ''
+    ]);
+    const csvContent = [headers, ...rows].map(r => r.map(f => `"${f}"`).join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.setAttribute('download', `reports_${reportsPeriod}_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [reportsTransactions, reportsPeriod]);
+
   const ReportsTab = useMemo(() => (
     <div className="space-y-6">
+      {/* Completed Payments & Total Revenue Section with Duration */}
+      <div className="space-y-4">
+        <div className="flex justify-between items-center">
+          <h3 className="text-lg font-semibold">Payment Summary</h3>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={exportReportsCSV} disabled={!reportsTransactions}>
+              <Download className="w-4 h-4 mr-1" />
+              Export CSV
+            </Button>
+            <Select value={reportsPeriod} onValueChange={setReportsPeriod}>
+              <SelectTrigger className="w-40">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="7d">Last 7 Days</SelectItem>
+                <SelectItem value="30d">Last 30 Days</SelectItem>
+                <SelectItem value="90d">Last 90 Days</SelectItem>
+                <SelectItem value="1y">Last Year</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center gap-4">
+                <div className="p-2 bg-green-100 rounded-full">
+                  <CheckCircle className="w-6 h-6 text-green-600" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">{reportsStats.completedPayments}</p>
+                  <p className="text-sm text-gray-600">Completed Payments</p>
+                  <Badge variant="default" className="mt-1 bg-green-100 text-green-800">
+                    Successful
+                  </Badge>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-center gap-4">
+                <div className="p-2 bg-blue-100 rounded-full">
+                  <DollarSign className="w-6 h-6 text-blue-600" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">₹{reportsStats.totalRevenue.toLocaleString()}</p>
+                  <p className="text-sm text-gray-600">Total Revenue</p>
+                  <Badge variant="secondary" className="mt-1">
+                    Collected
+                  </Badge>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {/* Transaction Search */}
       <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
         <div className="relative max-w-md w-full">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -856,54 +1119,54 @@ const Dashboard: React.FC = () => {
         </Button>
       </div>
 
-      {transactions && (
+      {reportsTransactions && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Successful Transactions</CardTitle>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 bg-green-50 border-b border-green-200">
+              <CardTitle className="text-sm font-medium text-green-900">Successful Transactions</CardTitle>
               <CheckCircle className="h-4 w-4 text-green-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{transactions.totalSuccess}</div>
+              <div className="text-2xl font-bold text-green-700">{reportsTransactions.totalSuccess}</div>
               <div className="text-xs text-muted-foreground">
-                +{Math.round((transactions.totalSuccess / transactions.allTransaction.length) * 100)}% from total
+                +{Math.round((reportsTransactions.totalSuccess / reportsTransactions.allTransaction.length) * 100)}% from total
               </div>
               <div className="mt-4 space-y-2 max-h-60 overflow-y-auto">
-                {filteredTransactions.success.map((transaction) => (
-                  <TransactionCard key={transaction._id} transaction={transaction} />
+                {filteredReportsTransactions.success.map((transaction) => (
+                  <TransactionCard key={transaction._id} transaction={transaction} isSuccess={true} />
                 ))}
               </div>
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Failed Transactions</CardTitle>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 bg-red-50 border-b border-red-200">
+              <CardTitle className="text-sm font-medium text-red-900">Failed Transactions</CardTitle>
               <XCircle className="h-4 w-4 text-red-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{transactions.totalFailed}</div>
+              <div className="text-2xl font-bold text-red-700">{reportsTransactions.totalFailed}</div>
               <div className="text-xs text-muted-foreground">
-                +{Math.round((transactions.totalFailed / transactions.allTransaction.length) * 100)}% from total
+                +{Math.round((reportsTransactions.totalFailed / reportsTransactions.allTransaction.length) * 100)}% from total
               </div>
               <div className="mt-4 space-y-2 max-h-60 overflow-y-auto">
-                {filteredTransactions.failed.map((transaction) => (
-                  <TransactionCard key={transaction._id} transaction={transaction} />
+                {filteredReportsTransactions.failed.map((transaction) => (
+                  <TransactionCard key={transaction._id} transaction={transaction} isSuccess={false} />
                 ))}
               </div>
             </CardContent>
           </Card>
 
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Unprocessed Transactions</CardTitle>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 bg-orange-50 border-b border-orange-200">
+              <CardTitle className="text-sm font-medium text-orange-900">Unprocessed Transactions</CardTitle>
               <Clock className="h-4 w-4 text-orange-600" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{transactions.unproccessedTransactionCount}</div>
+              <div className="text-2xl font-bold text-orange-700">{reportsTransactions.unproccessedTransactionCount}</div>
               <p className="text-xs text-muted-foreground">Pending manual processing</p>
               <div className="mt-4 space-y-2">
-                {transactions.unproccessedTransaction.slice(0, 3).map((item: any) => {
+                {reportsTransactions.unproccessedTransaction.slice(0, 3).map((item: any) => {
                   const userObj = item.userId || item.user || item;
 
 
@@ -934,7 +1197,7 @@ const Dashboard: React.FC = () => {
         </div>
       )}
     </div>
-  ), [transactions, filteredTransactions, transactionSearchTerm, refreshing, handleRefresh]);
+  ), [reportsTransactions, filteredReportsTransactions, transactionSearchTerm, refreshing, handleRefresh, reportsStats, reportsPeriod, exportReportsCSV]);
 
   if (loading) {
     return <LoadingSkeleton />;
