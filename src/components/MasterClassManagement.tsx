@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { DateTimePicker } from "./ui/date-time-picker";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import TiptapEditor from "./TiptapEditor";
 
 interface Category {
     id: string;
@@ -24,6 +25,7 @@ interface Masterclass {
     title: string;
     subHeading?: string;
     description: string;
+    richContent?: string;
     status: string;
     price: number;
     originalPrice?: number;
@@ -59,6 +61,7 @@ const MasterclassManagement = () => {
     const [view, setView] = useState<"list" | "form">("list");
     const [editingMasterclass, setEditingMasterclass] = useState<Masterclass | null>(null);
     const [masterclasses, setMasterclasses] = useState<Masterclass[]>([]);
+    const [showRichContent, setShowRichContent] = useState(false);
 
     // Waitlist State
     const [isWaitlistModalOpen, setIsWaitlistModalOpen] = useState(false);
@@ -78,6 +81,7 @@ const MasterclassManagement = () => {
             title: "",
             subHeading: "",
             description: "",
+            richContent: "",
             status: "Coming Soon",
             price: 0,
             originalPrice: undefined,
@@ -175,10 +179,12 @@ const MasterclassManagement = () => {
 
     const handleCreate = () => {
         setEditingMasterclass(null);
+        setShowRichContent(false);
         reset({
             title: "",
             subHeading: "",
             description: "",
+            richContent: "",
             status: "Coming Soon",
             price: 0,
             originalPrice: undefined,
@@ -199,6 +205,7 @@ const MasterclassManagement = () => {
 
     const handleEdit = (masterclass: Masterclass) => {
         setEditingMasterclass(masterclass);
+        setShowRichContent(false);
 
         let formattedDate = "";
         if (masterclass.startDate) {
@@ -225,6 +232,7 @@ const MasterclassManagement = () => {
             title: data.title,
             subHeading: nullIfEmpty(data.subHeading),
             description: data.description,
+            richContent: nullIfEmpty(data.richContent),
             status: data.status || 'Coming Soon',
             price: Number(data.price),
             originalPrice: data.originalPrice ? Number(data.originalPrice) : null,
@@ -332,6 +340,38 @@ const MasterclassManagement = () => {
                                     <Label className="py-1">Description *</Label>
                                     <Textarea {...register("description", { required: "Description is required" })} rows={4} />
                                     {errors.description && <p className="text-red-500 text-sm">{errors.description.message}</p>}
+                                </div>
+
+                                {/* Rich Content (Optional) with Toggle */}
+                                <div>
+                                    <div className="flex items-center justify-between mb-2">
+                                        <Label className="py-1">Rich Content (Optional)</Label>
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => setShowRichContent(!showRichContent)}
+                                            className="text-xs"
+                                        >
+                                            {showRichContent ? 'Hide Editor' : 'Show Editor'}
+                                        </Button>
+                                    </div>
+                                    {showRichContent && (
+                                        <>
+                                            <p className="text-xs text-gray-500 mb-2">Add detailed formatted content with images, tables, code blocks, etc.</p>
+                                            <Controller
+                                                name="richContent"
+                                                control={control}
+                                                render={({ field }) => (
+                                                    <TiptapEditor
+                                                        content={field.value || ''}
+                                                        onChange={field.onChange}
+                                                        placeholder="Add detailed content here..."
+                                                    />
+                                                )}
+                                            />
+                                        </>
+                                    )}
                                 </div>
 
                                 {/* Type + Category */}
