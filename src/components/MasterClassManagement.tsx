@@ -25,7 +25,7 @@ interface Masterclass {
     title: string;
     subHeading?: string;
     description: string;
-    richContent?: string;
+    content?: string;
     status: string;
     price: number;
     originalPrice?: number;
@@ -81,7 +81,7 @@ const MasterclassManagement = () => {
             title: "",
             subHeading: "",
             description: "",
-            richContent: "",
+            content: "",
             status: "Coming Soon",
             price: 0,
             originalPrice: undefined,
@@ -184,7 +184,7 @@ const MasterclassManagement = () => {
             title: "",
             subHeading: "",
             description: "",
-            richContent: "",
+            content: "",
             status: "Coming Soon",
             price: 0,
             originalPrice: undefined,
@@ -232,7 +232,7 @@ const MasterclassManagement = () => {
             title: data.title,
             subHeading: nullIfEmpty(data.subHeading),
             description: data.description,
-            richContent: nullIfEmpty(data.richContent),
+            content: nullIfEmpty(data.content),
             status: data.status || 'Coming Soon',
             price: Number(data.price),
             originalPrice: data.originalPrice ? Number(data.originalPrice) : null,
@@ -360,7 +360,7 @@ const MasterclassManagement = () => {
                                         <>
                                             <p className="text-xs text-gray-500 mb-2">Add detailed formatted content with images, tables, code blocks, etc.</p>
                                             <Controller
-                                                name="richContent"
+                                                name="content"
                                                 control={control}
                                                 render={({ field }) => (
                                                     <TiptapEditor
