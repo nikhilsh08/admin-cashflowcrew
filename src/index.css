@@ -120,3 +120,198 @@
     @apply bg-background text-foreground;
   }
 }
+
+.tiptap ul.Bento-style-list,
+.tiptap ol.Bento-style-list,
+.tiptap ul.learning-objectives,
+.tiptap ol.learning-objectives {
+  list-style: none;
+  margin: 1rem 0;
+  padding: 1rem;
+  border-radius: 1rem;
+  background: #171412;
+  border: 1px solid #2a2622;
+}
+
+.tiptap ul.Bento-style-list > li,
+.tiptap ol.Bento-style-list > li,
+.tiptap ul.learning-objectives > li,
+.tiptap ol.learning-objectives > li {
+  position: relative;
+  margin: 0.5rem 0;
+  padding: 0.75rem 1rem 0.75rem 2.75rem;
+  border-radius: 0.75rem;
+  background: #221e1b;
+  color: #f8f5ef;
+  font-weight: 500;
+}
+
+.tiptap ul.Bento-style-list > li::before,
+.tiptap ol.Bento-style-list > li::before,
+.tiptap ul.learning-objectives > li::before,
+.tiptap ol.learning-objectives > li::before {
+  content: '✓';
+  position: absolute;
+  left: 0.95rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 9999px;
+  border: 1px solid #0a8a7f;
+  color: #0a8a7f;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  line-height: 1;
+}
+
+.tiptap ul.tip-tap-minimalist,
+.tiptap ol.tip-tap-minimalist,
+.tiptap ul.course-module,
+.tiptap ol.course-module {
+  list-style: none;
+  margin: 1.5rem 0;
+  padding: 0;
+  counter-reset: minimalist-counter;
+}
+
+.tiptap ul.tip-tap-minimalist > li,
+.tiptap ol.tip-tap-minimalist > li,
+.tiptap ul.course-module > li,
+.tiptap ol.course-module > li {
+  position: relative;
+  margin: 0 0 1.4rem 0;
+  padding-left: 3.6rem;
+  color: #1a1714;
+  line-height: 1.7;
+  font-weight: 400;
+  font-family: Inter, system-ui, sans-serif;
+}
+
+.tiptap ul.tip-tap-minimalist > li > p,
+.tiptap ol.tip-tap-minimalist > li > p,
+.tiptap ul.course-module > li > p,
+.tiptap ol.course-module > li > p {
+  margin: 0;
+  color: #1a1714;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-weight: 700;
+  font-size: clamp(1.05rem, 1.45vw, 1.9rem);
+  line-height: 1.24;
+}
+
+.tiptap ul.tip-tap-minimalist > li::before,
+.tiptap ol.tip-tap-minimalist > li::before,
+.tiptap ul.course-module > li::before,
+.tiptap ol.course-module > li::before {
+  counter-increment: minimalist-counter;
+  content: counter(minimalist-counter, decimal-leading-zero);
+  position: absolute;
+  left: 0;
+  top: -0.08rem;
+  width: 2.8rem;
+  font-size: 2.5rem;
+  line-height: 1;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  color: #e2ddd4;
+}
+
+.tiptap ul.tip-tap-minimalist > li > ul,
+.tiptap ul.tip-tap-minimalist > li > ol,
+.tiptap ol.tip-tap-minimalist > li > ul,
+.tiptap ol.tip-tap-minimalist > li > ol,
+.tiptap ul.course-module > li > ul,
+.tiptap ul.course-module > li > ol,
+.tiptap ol.course-module > li > ul,
+.tiptap ol.course-module > li > ol {
+  list-style: none;
+  counter-reset: minimalist-sub;
+  margin: 0.55rem 0 0;
+  padding: 0;
+}
+
+.tiptap ul.tip-tap-minimalist > li > ul > li,
+.tiptap ul.tip-tap-minimalist > li > ol > li,
+.tiptap ol.tip-tap-minimalist > li > ul > li,
+.tiptap ol.tip-tap-minimalist > li > ol > li,
+.tiptap ul.course-module > li > ul > li,
+.tiptap ul.course-module > li > ol > li,
+.tiptap ol.course-module > li > ul > li,
+.tiptap ol.course-module > li > ol > li {
+  position: relative;
+  padding-left: 0;
+  color: #8f887e;
+  margin: 0.22rem 0;
+  line-height: 1.58;
+  font-weight: 400;
+  font-family: Inter, system-ui, sans-serif;
+}
+
+.tiptap ul.tip-tap-minimalist > li > ul > li > p,
+.tiptap ul.tip-tap-minimalist > li > ol > li > p,
+.tiptap ol.tip-tap-minimalist > li > ul > li > p,
+.tiptap ol.tip-tap-minimalist > li > ol > li > p,
+.tiptap ul.course-module > li > ul > li > p,
+.tiptap ul.course-module > li > ol > li > p,
+.tiptap ol.course-module > li > ul > li > p,
+.tiptap ol.course-module > li > ol > li > p {
+  margin: 0;
+}
+
+.tiptap ul.tip-tap-minimalist > li > ul > li::before,
+.tiptap ul.tip-tap-minimalist > li > ol > li::before,
+.tiptap ol.tip-tap-minimalist > li > ul > li::before,
+.tiptap ol.tip-tap-minimalist > li > ol > li::before,
+.tiptap ul.course-module > li > ul > li::before,
+.tiptap ul.course-module > li > ol > li::before,
+.tiptap ol.course-module > li > ul > li::before,
+.tiptap ol.course-module > li > ol > li::before {
+  content: none;
+}
+
+.tiptap ul.tip-tap-minimalist > li > ul > li:first-child,
+.tiptap ul.tip-tap-minimalist > li > ol > li:first-child,
+.tiptap ol.tip-tap-minimalist > li > ul > li:first-child,
+.tiptap ol.tip-tap-minimalist > li > ol > li:first-child,
+.tiptap ul.course-module > li > ul > li:first-child,
+.tiptap ul.course-module > li > ol > li:first-child,
+.tiptap ol.course-module > li > ul > li:first-child,
+.tiptap ol.course-module > li > ol > li:first-child {
+  color: #4f46e5;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: 0.82rem;
+  font-weight: 700;
+  margin-top: 0.25rem;
+}
+
+.tiptap ul.tip-tap-minimalist > li > a,
+.tiptap ol.tip-tap-minimalist > li > a,
+.tiptap ul.course-module > li > a,
+.tiptap ol.course-module > li > a {
+  display: block;
+  margin-top: 0.2rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  font-size: 0.82rem;
+}
+
+.tiptap ul.tip-tap-minimalist a,
+.tiptap ol.tip-tap-minimalist a,
+.tiptap ul.course-module a,
+.tiptap ol.course-module a {
+  color: #4f46e5;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  font-weight: 600;
+}
+
+.tiptap ul.tip-tap-minimalist a:hover,
+.tiptap ol.tip-tap-minimalist a:hover,
+.tiptap ul.course-module a:hover,
+.tiptap ol.course-module a:hover {
+  color: #4338ca;
+}

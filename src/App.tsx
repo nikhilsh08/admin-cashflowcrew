@@ -18,6 +18,7 @@ import OrderDetails from "./components/OrderDetails";
 import ImageManagement from "./components/ImageManagement";
 import BlogsManagement from "./components/BlogsManagement";
 import BlogFormPage from "./components/BlogFormPage";
+import BundleManagement from "./components/BundleManagement";
 
 import AdminLayout from "./components/AdminLayout";
 
@@ -78,6 +79,11 @@ const AppContent: React.FC = () => {
         <Route path="/admin/coupons" element={
           <AdminLayout title="Coupons">
             <CouponsManagement />
+          </AdminLayout>
+        } />
+        <Route path="/admin/bundles" element={
+          <AdminLayout title="Bundles">
+            <BundleManagement />
           </AdminLayout>
         } />
         <Route path="/admin/images" element={

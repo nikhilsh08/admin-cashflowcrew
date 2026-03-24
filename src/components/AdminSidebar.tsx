@@ -19,6 +19,7 @@ import {
   BadgeDollarSign,
   Images,
   FileText,
+  Package,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Button } from './ui/button';
@@ -81,6 +82,11 @@ const navMain = [
     title: "Coupons",
     url: "/admin/coupons",
     icon: BadgeDollarSign,
+  },
+  {
+    title: "Bundles",
+    url: "/admin/bundles",
+    icon: Package,
   },
   {
     title: "Categories",

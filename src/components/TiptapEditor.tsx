@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import { BubbleMenu } from '@tiptap/react/menus';
 import StarterKit from '@tiptap/starter-kit';
@@ -18,6 +18,7 @@ import TableCell from '@tiptap/extension-table-cell';
 import TableHeader from '@tiptap/extension-table-header';
 import Subscript from '@tiptap/extension-subscript';
 import Superscript from '@tiptap/extension-superscript';
+import { Extension } from '@tiptap/core';
 import { createLowlight } from 'lowlight';
 import js from 'highlight.js/lib/languages/javascript';
 import ts from 'highlight.js/lib/languages/typescript';
@@ -45,6 +46,16 @@ lowlight.register('css', css);
 lowlight.register('html', html);
 lowlight.register('python', python);
 lowlight.register('sql', sql);
+
+const CLASSABLE_NODE_TYPES = new Set([
+    'paragraph',
+    'heading',
+    'listItem',
+    'bulletList',
+    'orderedList',
+    'blockquote',
+    'codeBlock',
+]);
 
 interface TiptapEditorProps {
     content: string;
@@ -87,10 +98,43 @@ const TiptapEditor: React.FC<TiptapEditorProps> = ({
     const [imageAlt, setImageAlt] = useState('');
     const [showColorPicker, setShowColorPicker] = useState(false);
     const [showHighlightPicker, setShowHighlightPicker] = useState(false);
+    const [showClassModal, setShowClassModal] = useState(false);
+    const [classValue, setClassValue] = useState('');
+    const [appliedClasses, setAppliedClasses] = useState<string[]>([]);
+    const selectionRef = useRef<any>(null);
+
+    // Global extension to add class attribute to all nodes
+    const ClassAttribute = Extension.create({
+        name: 'classAttribute',
+
+        addGlobalAttributes() {
+            return [
+                {
+                    types: ['paragraph', 'heading', 'listItem', 'bulletList', 'orderedList', 'blockquote', 'codeBlock'],
+                    attributes: {
+                        class: {
+                            default: null,
+                            parseHTML: element => element.getAttribute('class') || null,
+                            renderHTML: attributes => {
+                                if (!attributes.class) return {};
+                                return { class: attributes.class };
+                            },
+                        },
+                    },
+                },
+            ];
+        },
+    });
 
     const editor = useEditor({
         extensions: [
-            StarterKit.configure({ codeBlock: false }),
+            StarterKit.configure({
+                codeBlock: false,
+                heading: {
+                    levels: [1, 2, 3, 4],
+                },
+            }),
+            ClassAttribute,
             Underline,
             TextStyle,
             Color,
@@ -111,6 +155,7 @@ const TiptapEditor: React.FC<TiptapEditorProps> = ({
         content,
         onUpdate: ({ editor }) => {
             onChange(editor.getHTML());
+            updateAppliedClasses();
         },
         editorProps: {
             attributes: {
@@ -118,6 +163,34 @@ const TiptapEditor: React.FC<TiptapEditorProps> = ({
             },
         },
     });
+
+    const getClassTargetFromSelection = useCallback((selection?: any, preferListNode = false) => {
+        if (!editor) return null;
+
+        const currentSelection = selection || editor.state.selection;
+        const { $from } = currentSelection;
+
+        let fallbackTarget: { node: any; pos: number; type: string } | null = null;
+
+        for (let depth = $from.depth; depth > 0; depth -= 1) {
+            const node = $from.node(depth);
+            const type = node.type.name;
+
+            if (!CLASSABLE_NODE_TYPES.has(type)) continue;
+
+            const target = { node, pos: $from.before(depth), type };
+
+            if (preferListNode && (type === 'bulletList' || type === 'orderedList')) {
+                return target;
+            }
+
+            if (!fallbackTarget) {
+                fallbackTarget = target;
+            }
+        }
+
+        return fallbackTarget;
+    }, [editor]);
 
     const addLink = useCallback(() => {
         if (!editor) return;
@@ -138,6 +211,124 @@ const TiptapEditor: React.FC<TiptapEditorProps> = ({
         setImageAlt('');
         setShowImageInput(false);
     }, [editor, imageUrl, imageAlt]);
+
+    const applyClass = useCallback(() => {
+        if (!editor || !classValue.trim()) return;
+
+        const activeSelection = selectionRef.current || editor.state.selection;
+
+        // Restore selection
+        const { tr } = editor.state;
+        const transaction = tr.setSelection(activeSelection);
+        editor.view.dispatch(transaction);
+
+        const preferListNode = /\b(Bento-style-list|learning-objectives|tip-tap-minimalist|course-module|faq-toggle|tip-tap-faq)\b/.test(classValue);
+        const target = getClassTargetFromSelection(activeSelection, preferListNode);
+        if (!target) return;
+
+        const currentClasses: string[] = (target.node.attrs?.class || '').split(/\s+/).filter(Boolean);
+        const incomingClasses: string[] = classValue.split(/\s+/).filter(Boolean);
+        const nextClassSet = new Set([...currentClasses, ...incomingClasses]);
+        const newClasses = Array.from(nextClassSet).join(' ').trim();
+
+        const updateTr = editor.state.tr
+            .setNodeMarkup(target.pos, null, { ...target.node.attrs, class: newClasses || null });
+
+        editor.view.dispatch(updateTr);
+        setAppliedClasses(newClasses.split(/\s+/));
+        setClassValue('');
+    }, [editor, classValue, getClassTargetFromSelection]);
+
+    const toggleClassPreset = useCallback((presetClasses: string[]) => {
+        if (!editor) return;
+
+        const activeSelection = selectionRef.current || editor.state.selection;
+
+        // Restore selection
+        const { tr } = editor.state;
+        const transaction = tr.setSelection(activeSelection);
+        editor.view.dispatch(transaction);
+
+        const preferListNode = presetClasses.some(
+            cls => cls === 'Bento-style-list' ||
+                cls === 'learning-objectives' ||
+                cls === 'tip-tap-minimalist' ||
+                cls === 'course-module' ||
+                cls === 'faq-toggle' ||
+                cls === 'tip-tap-faq'
+        );
+        const target = getClassTargetFromSelection(activeSelection, preferListNode);
+        if (!target) return;
+
+        const currentClasses: string = target.node.attrs?.class || '';
+        const classList: string[] = currentClasses.split(/\s+/).filter(Boolean);
+        const hasAllPresetClasses = presetClasses.every(cls => classList.includes(cls));
+
+        let nextClasses: string[];
+        if (hasAllPresetClasses) {
+            nextClasses = classList.filter((cls: string) => !presetClasses.includes(cls));
+        } else {
+            const nextSet = new Set<string>(classList);
+            presetClasses.forEach(cls => nextSet.add(cls));
+            nextClasses = Array.from(nextSet);
+        }
+
+        const newClasses = nextClasses.join(' ').trim();
+        const updateTr = editor.state.tr
+            .setNodeMarkup(target.pos, null, { ...target.node.attrs, class: newClasses || null });
+
+        editor.view.dispatch(updateTr);
+        setAppliedClasses(nextClasses);
+    }, [editor, getClassTargetFromSelection]);
+
+    const removeClass = useCallback((classToRemove: string) => {
+        if (!editor || !selectionRef.current) return;
+
+        // Restore selection
+        const { tr } = editor.state;
+        const transaction = tr.setSelection(selectionRef.current);
+        editor.view.dispatch(transaction);
+
+        const target = getClassTargetFromSelection(selectionRef.current);
+        if (!target) return;
+
+        const currentClasses = target.node.attrs?.class || '';
+        const classList = currentClasses.split(/\s+/).filter((c: string) => c !== classToRemove);
+
+        const newClasses = classList.join(' ').trim();
+        const updateTr = editor.state.tr
+            .setNodeMarkup(target.pos, null, { ...target.node.attrs, class: newClasses || null });
+
+        editor.view.dispatch(updateTr);
+        setAppliedClasses(classList);
+    }, [editor, getClassTargetFromSelection]);
+
+    // Update applied classes when selection changes
+    const updateAppliedClasses = useCallback((selection?: any) => {
+        if (!editor) return;
+
+        const target = getClassTargetFromSelection(selection);
+        if (!target) return;
+
+        const currentClasses = target.node.attrs?.class || '';
+        setAppliedClasses(currentClasses.split(/\s+/).filter(Boolean));
+    }, [editor, getClassTargetFromSelection]);
+
+    const classPresets = [
+        { label: 'Large Text', classes: ['text-lg'] },
+        { label: 'Small Text', classes: ['text-sm'] },
+        { label: 'Bold Text', classes: ['font-bold'] },
+        { label: 'Center', classes: ['text-center'] },
+        { label: 'Highlight', classes: ['bg-yellow-200'] },
+        { label: 'Accent', classes: ['text-blue-600'] },
+        { label: 'Danger', classes: ['text-red-600'] },
+        { label: 'Success', classes: ['text-green-600'] },
+        { label: 'Border', classes: ['border', 'border-gray-300', 'p-2', 'rounded'] },
+        { label: 'Shadow', classes: ['shadow-md', 'rounded'] },
+        { label: 'Bento-style-list', classes: ['Bento-style-list', 'learning-objectives'] },
+        { label: 'Minimalist', classes: ['tip-tap-minimalist', 'course-module'] },
+        { label: 'faq-toggle', classes: ['faq-toggle', 'tip-tap-faq'] },
+    ];
 
     const colors = [
         '#000000', '#374151', '#EF4444', '#F97316', '#EAB308',
@@ -334,7 +525,6 @@ const TiptapEditor: React.FC<TiptapEditorProps> = ({
                 </ToolbarButton>
             </div>
 
-            {/* Link Input Panel */}
             {showLinkInput && (
                 <div className="border-b border-gray-200 dark:border-gray-700 bg-blue-50 dark:bg-blue-950 px-3 py-2 flex items-center gap-2">
                     <LinkIcon className="w-4 h-4 text-blue-500 flex-shrink-0" />
@@ -347,15 +537,15 @@ const TiptapEditor: React.FC<TiptapEditorProps> = ({
                         onKeyDown={e => e.key === 'Enter' && addLink()}
                         autoFocus
                     />
-                    <Button size="sm" onClick={addLink} className="h-7 text-xs px-3 bg-blue-600 hover:bg-blue-700">
+                    <Button type="button" size="sm" onClick={addLink} className="h-7 text-xs px-3 bg-blue-600 hover:bg-blue-700">
                         {editor.isActive('link') ? 'Update' : 'Set Link'}
                     </Button>
                     {editor.isActive('link') && (
-                        <Button size="sm" variant="outline" onClick={() => { editor.chain().focus().unsetLink().run(); setShowLinkInput(false); }} className="h-7 text-xs px-2">
+                        <Button type="button" size="sm" variant="outline" onClick={() => { editor.chain().focus().unsetLink().run(); setShowLinkInput(false); }} className="h-7 text-xs px-2">
                             Remove
                         </Button>
                     )}
-                    <button onClick={() => setShowLinkInput(false)} className="text-gray-400 hover:text-gray-600">
+                    <button type="button" onClick={() => setShowLinkInput(false)} className="text-gray-400 hover:text-gray-600">
                         <X className="w-4 h-4" />
                     </button>
                 </div>
@@ -367,7 +557,7 @@ const TiptapEditor: React.FC<TiptapEditorProps> = ({
                     <div className="flex items-center gap-2">
                         <ImageIcon className="w-4 h-4 text-green-600 flex-shrink-0" />
                         <span className="text-sm font-medium text-green-800 dark:text-green-200">Insert Image from URL</span>
-                        <button onClick={() => setShowImageInput(false)} className="ml-auto text-gray-400 hover:text-gray-600">
+                        <button type="button" onClick={() => setShowImageInput(false)} className="ml-auto text-gray-400 hover:text-gray-600">
                             <X className="w-4 h-4" />
                         </button>
                     </div>
@@ -388,7 +578,7 @@ const TiptapEditor: React.FC<TiptapEditorProps> = ({
                             placeholder="Alt text (optional)"
                             className="h-7 text-sm w-44"
                         />
-                        <Button size="sm" onClick={addImage} disabled={!imageUrl.trim()} className="h-7 text-xs px-3 bg-green-600 hover:bg-green-700">
+                        <Button type="button" size="sm" onClick={addImage} disabled={!imageUrl.trim()} className="h-7 text-xs px-3 bg-green-600 hover:bg-green-700">
                             Insert
                         </Button>
                     </div>
@@ -398,17 +588,161 @@ const TiptapEditor: React.FC<TiptapEditorProps> = ({
             {/* Editor Content — scrollable */}
             <div className="relative flex-1 overflow-y-auto" onClick={() => editor.commands.focus()}>
                 {editor && (
-                    <BubbleMenu editor={editor}
-                        className="flex items-center gap-1 bg-gray-900 text-white rounded-lg px-2 py-1 shadow-xl z-50">
-                        <button onClick={() => editor.chain().focus().toggleBold().run()} className={`p-1 rounded text-xs font-bold ${editor.isActive('bold') ? 'bg-white/20' : 'hover:bg-white/10'}`}>B</button>
-                        <button onClick={() => editor.chain().focus().toggleItalic().run()} className={`p-1 rounded text-xs italic ${editor.isActive('italic') ? 'bg-white/20' : 'hover:bg-white/10'}`}>I</button>
-                        <button onClick={() => editor.chain().focus().toggleUnderline().run()} className={`p-1 rounded text-xs underline ${editor.isActive('underline') ? 'bg-white/20' : 'hover:bg-white/10'}`}>U</button>
-                        <button onClick={() => editor.chain().focus().toggleStrike().run()} className={`p-1 rounded text-xs line-through ${editor.isActive('strike') ? 'bg-white/20' : 'hover:bg-white/10'}`}>S</button>
-                        <div className="w-px h-4 bg-white/30 mx-0.5" />
-                        <button onClick={() => { const prevUrl = editor.getAttributes('link').href || ''; setLinkUrl(prevUrl); setShowLinkInput(true); }} className={`p-1 rounded ${editor.isActive('link') ? 'bg-white/20' : 'hover:bg-white/10'}`}>
-                            <LinkIcon className="w-3 h-3" />
-                        </button>
-                    </BubbleMenu>
+                    <>
+                        <BubbleMenu
+                            editor={editor}
+                            shouldShow={({ from, to }) => from < to}
+                            className="flex items-center gap-1 bg-gray-900 text-white rounded-lg px-2 py-1 shadow-xl z-50">
+                            <button type="button" onClick={() => editor.chain().focus().toggleBold().run()} className={`p-1 rounded text-xs font-bold ${editor.isActive('bold') ? 'bg-white/20' : 'hover:bg-white/10'}`}>B</button>
+                            <button type="button" onClick={() => editor.chain().focus().toggleItalic().run()} className={`p-1 rounded text-xs italic ${editor.isActive('italic') ? 'bg-white/20' : 'hover:bg-white/10'}`}>I</button>
+                            <button type="button" onClick={() => editor.chain().focus().toggleUnderline().run()} className={`p-1 rounded text-xs underline ${editor.isActive('underline') ? 'bg-white/20' : 'hover:bg-white/10'}`}>U</button>
+                            <button type="button" onClick={() => editor.chain().focus().toggleStrike().run()} className={`p-1 rounded text-xs line-through ${editor.isActive('strike') ? 'bg-white/20' : 'hover:bg-white/10'}`}>S</button>
+                            <div className="w-px h-4 bg-white/30 mx-0.5" />
+                            <button type="button" onClick={() => { const prevUrl = editor.getAttributes('link').href || ''; setLinkUrl(prevUrl); setShowLinkInput(true); }} className={`p-1 rounded ${editor.isActive('link') ? 'bg-white/20' : 'hover:bg-white/10'}`}>
+                                <LinkIcon className="w-3 h-3" />
+                            </button>
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.preventDefault();
+                                    selectionRef.current = editor.state.selection;
+                                    setShowClassModal(true);
+                                    updateAppliedClasses(editor.state.selection);
+                                }}
+                                className={`p-1 rounded ${showClassModal ? 'bg-white/20' : 'hover:bg-white/10'}`}
+                                title="Add CSS Classes">
+                                <Code className="w-3 h-3" />
+                            </button>
+                        </BubbleMenu>
+
+                        {/* Class Modal */}
+                        {showClassModal && (
+                            <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center" onClick={(e) => {
+                                if (e.target === e.currentTarget) {
+                                    setShowClassModal(false);
+                                    selectionRef.current = null;
+                                }
+                            }}>
+                                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+                                    {/* Header */}
+                                    <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
+                                        <div className="flex items-center gap-2">
+                                            <Code className="w-5 h-5 text-purple-600" />
+                                            <h2 className="font-semibold text-gray-900 dark:text-white">Add CSS Classes</h2>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                            setShowClassModal(false);
+                                            selectionRef.current = null;
+                                        }} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300">
+                                            <X className="w-5 h-5" />
+                                        </button>
+                                    </div>
+
+                                    {/* Content */}
+                                    <div className="p-4 space-y-4 max-h-96 overflow-y-auto">
+                                        {/* Custom Class Input */}
+                                        <div>
+                                            <label className="text-xs font-medium text-gray-600 dark:text-gray-300 mb-2 block">Custom Class</label>
+                                            <div className="flex gap-2">
+                                                <Input
+                                                    type="text"
+                                                    value={classValue}
+                                                    onChange={e => setClassValue(e.target.value)}
+                                                    placeholder="e.g., text-lg font-bold"
+                                                    className="h-8 text-sm flex-1"
+                                                    onKeyDown={e => {
+                                                        e.stopPropagation();
+                                                        if (e.key === 'Enter') {
+                                                            applyClass();
+                                                        }
+                                                    }}
+                                                    autoFocus
+                                                />
+                                                <Button type="button" size="sm" onClick={applyClass} disabled={!classValue.trim()} className="h-8 text-xs px-3 bg-purple-600 hover:bg-purple-700">
+                                                    Add
+                                                </Button>
+                                            </div>
+                                        </div>
+
+                                        {/* Presets */}
+                                        <div>
+                                            <label className="text-xs font-medium text-gray-600 dark:text-gray-300 mb-2 block">Quick Presets</label>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                {classPresets.map(preset => (
+                                                    (() => {
+                                                        const presetActive = preset.classes.every(cls => appliedClasses.includes(cls));
+                                                        return (
+                                                    <button
+                                                        type="button"
+                                                        key={preset.classes.join('|')}
+                                                        onClick={() => {
+                                                            toggleClassPreset(preset.classes);
+                                                            setShowClassModal(false);
+                                                            selectionRef.current = null;
+                                                        }}
+                                                        className={`px-3 py-2 text-xs rounded transition-all ${
+                                                            presetActive
+                                                                ? 'bg-purple-600 text-white'
+                                                                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:border-purple-300'
+                                                        }`}
+                                                    >
+                                                        {preset.label}
+                                                    </button>
+                                                        );
+                                                    })()
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        {/* Applied Classes */}
+                                        {appliedClasses.length > 0 && (
+                                            <div>
+                                                <label className="text-xs font-medium text-gray-600 dark:text-gray-300 mb-2 block">Applied Classes</label>
+                                                <div className="flex flex-wrap gap-1.5">
+                                                    {appliedClasses.map(cls => (
+                                                        <div
+                                                            key={cls}
+                                                            className="flex items-center gap-1.5 bg-gray-100 dark:bg-gray-700 px-2.5 py-1 rounded text-xs font-mono text-gray-700 dark:text-gray-300"
+                                                        >
+                                                            <span>{cls}</span>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => removeClass(cls)}
+                                                                className="text-red-500 hover:text-red-700 transition-colors"
+                                                                title="Remove"
+                                                            >
+                                                                <X className="w-3 h-3" />
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Footer */}
+                                    <div className="flex gap-2 p-4 border-t border-gray-200 dark:border-gray-700">
+                                        <Button type="button" variant="outline" size="sm" onClick={() => {
+                                            setShowClassModal(false);
+                                            selectionRef.current = null;
+                                            setClassValue('');
+                                        }} className="flex-1">
+                                            Cancel
+                                        </Button>
+                                        <Button type="button" size="sm" onClick={() => {
+                                            setShowClassModal(false);
+                                            selectionRef.current = null;
+                                            setClassValue('');
+                                        }} className="flex-1 bg-purple-600 hover:bg-purple-700">
+                                            Done
+                                        </Button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </>
                 )}
                 <EditorContent editor={editor} />
             </div>
@@ -443,6 +777,186 @@ const TiptapEditor: React.FC<TiptapEditorProps> = ({
                 }
                 .tiptap ul { list-style-type: disc; padding-left: 1.5rem; margin: 0.5rem 0; }
                 .tiptap ol { list-style-type: decimal; padding-left: 1.5rem; margin: 0.5rem 0; }
+                .tiptap ul.Bento-style-list,
+                .tiptap ol.Bento-style-list,
+                .tiptap ul.learning-objectives,
+                .tiptap ol.learning-objectives {
+                    list-style: none;
+                    margin: 1rem 0;
+                    padding: 1rem;
+                    border-radius: 1rem;
+                    background: #171412;
+                    border: 1px solid #2A2622;
+                }
+                .tiptap ul.Bento-style-list > li,
+                .tiptap ol.Bento-style-list > li,
+                .tiptap ul.learning-objectives > li,
+                .tiptap ol.learning-objectives > li {
+                    position: relative;
+                    padding: 0.75rem 1rem 0.75rem 2.75rem;
+                    margin: 0.5rem 0;
+                    border-radius: 0.75rem;
+                    background: #221E1B;
+                    color: #F8F5EF;
+                    font-weight: 500;
+                }
+                .tiptap ul.Bento-style-list > li::before,
+                .tiptap ol.Bento-style-list > li::before,
+                .tiptap ul.learning-objectives > li::before,
+                .tiptap ol.learning-objectives > li::before {
+                    content: '✓';
+                    position: absolute;
+                    left: 0.95rem;
+                    top: 50%;
+                    transform: translateY(-50%);
+                    width: 1.25rem;
+                    height: 1.25rem;
+                    border-radius: 9999px;
+                    border: 1px solid #0A8A7F;
+                    color: #0A8A7F;
+                    display: inline-flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 0.75rem;
+                    line-height: 1;
+                }
+                .tiptap ul.tip-tap-minimalist,
+                .tiptap ol.tip-tap-minimalist,
+                .tiptap ul.course-module,
+                .tiptap ol.course-module {
+                    list-style: none;
+                    margin: 1.25rem 0;
+                    padding: 0;
+                    counter-reset: minimalist-counter;
+                }
+                .tiptap ul.tip-tap-minimalist > li,
+                .tiptap ol.tip-tap-minimalist > li,
+                .tiptap ul.course-module > li,
+                .tiptap ol.course-module > li {
+                    position: relative;
+                    margin: 0 0 1.4rem 0;
+                    padding-left: 3.6rem;
+                    color: #1A1714;
+                    line-height: 1.7;
+                    font-weight: 400;
+                    font-family: Inter, system-ui, sans-serif;
+                }
+                .tiptap ul.tip-tap-minimalist > li > p,
+                .tiptap ol.tip-tap-minimalist > li > p,
+                .tiptap ul.course-module > li > p,
+                .tiptap ol.course-module > li > p {
+                    margin: 0;
+                    color: #1A1714;
+                    font-family: Georgia, 'Times New Roman', serif;
+                    font-weight: 700;
+                    font-size: clamp(1.05rem, 1.45vw, 1.9rem);
+                    line-height: 1.24;
+                }
+                .tiptap ul.tip-tap-minimalist > li::before,
+                .tiptap ol.tip-tap-minimalist > li::before,
+                .tiptap ul.course-module > li::before,
+                .tiptap ol.course-module > li::before {
+                    counter-increment: minimalist-counter;
+                    content: counter(minimalist-counter, decimal-leading-zero);
+                    position: absolute;
+                    left: 0;
+                    top: -0.08rem;
+                    width: 2.8rem;
+                    font-size: 2.5rem;
+                    line-height: 1;
+                    font-weight: 700;
+                    letter-spacing: -0.035em;
+                    color: #E2DDD4;
+                }
+                .tiptap ul.tip-tap-minimalist > li > ul,
+                .tiptap ul.tip-tap-minimalist > li > ol,
+                .tiptap ol.tip-tap-minimalist > li > ul,
+                .tiptap ol.tip-tap-minimalist > li > ol,
+                .tiptap ul.course-module > li > ul,
+                .tiptap ul.course-module > li > ol,
+                .tiptap ol.course-module > li > ul,
+                .tiptap ol.course-module > li > ol {
+                    list-style: none;
+                    counter-reset: minimalist-sub;
+                    margin: 0.55rem 0 0;
+                    padding: 0;
+                }
+                .tiptap ul.tip-tap-minimalist > li > ul > li,
+                .tiptap ul.tip-tap-minimalist > li > ol > li,
+                .tiptap ol.tip-tap-minimalist > li > ul > li,
+                .tiptap ol.tip-tap-minimalist > li > ol > li,
+                .tiptap ul.course-module > li > ul > li,
+                .tiptap ul.course-module > li > ol > li,
+                .tiptap ol.course-module > li > ul > li,
+                .tiptap ol.course-module > li > ol > li {
+                    position: relative;
+                    padding-left: 0;
+                    color: #8F887E;
+                    margin: 0.22rem 0;
+                    line-height: 1.58;
+                    font-weight: 400;
+                    font-family: Inter, system-ui, sans-serif;
+                }
+                .tiptap ul.tip-tap-minimalist > li > ul > li > p,
+                .tiptap ul.tip-tap-minimalist > li > ol > li > p,
+                .tiptap ol.tip-tap-minimalist > li > ul > li > p,
+                .tiptap ol.tip-tap-minimalist > li > ol > li > p,
+                .tiptap ul.course-module > li > ul > li > p,
+                .tiptap ul.course-module > li > ol > li > p,
+                .tiptap ol.course-module > li > ul > li > p,
+                .tiptap ol.course-module > li > ol > li > p {
+                    margin: 0;
+                }
+                .tiptap ul.tip-tap-minimalist > li > ul > li::before,
+                .tiptap ul.tip-tap-minimalist > li > ol > li::before,
+                .tiptap ol.tip-tap-minimalist > li > ul > li::before,
+                .tiptap ol.tip-tap-minimalist > li > ol > li::before,
+                .tiptap ul.course-module > li > ul > li::before,
+                .tiptap ul.course-module > li > ol > li::before,
+                .tiptap ol.course-module > li > ul > li::before,
+                .tiptap ol.course-module > li > ol > li::before {
+                    content: none;
+                }
+                .tiptap ul.tip-tap-minimalist > li > ul > li:first-child,
+                .tiptap ul.tip-tap-minimalist > li > ol > li:first-child,
+                .tiptap ol.tip-tap-minimalist > li > ul > li:first-child,
+                .tiptap ol.tip-tap-minimalist > li > ol > li:first-child,
+                .tiptap ul.course-module > li > ul > li:first-child,
+                .tiptap ul.course-module > li > ol > li:first-child,
+                .tiptap ol.course-module > li > ul > li:first-child,
+                .tiptap ol.course-module > li > ol > li:first-child {
+                    color: #4F46E5;
+                    text-transform: uppercase;
+                    letter-spacing: 0.03em;
+                    font-size: 0.82rem;
+                    font-weight: 700;
+                    margin-top: 0.25rem;
+                }
+                .tiptap ul.tip-tap-minimalist > li > a,
+                .tiptap ol.tip-tap-minimalist > li > a,
+                .tiptap ul.course-module > li > a,
+                .tiptap ol.course-module > li > a {
+                    display: block;
+                    margin-top: 0.2rem;
+                    text-transform: uppercase;
+                    letter-spacing: 0.03em;
+                    font-size: 0.82rem;
+                }
+                .tiptap ul.tip-tap-minimalist a,
+                .tiptap ol.tip-tap-minimalist a,
+                .tiptap ul.course-module a,
+                .tiptap ol.course-module a {
+                    color: #4F46E5;
+                    text-decoration: underline;
+                    text-underline-offset: 3px;
+                    font-weight: 600;
+                }
+                .tiptap ul.tip-tap-minimalist a:hover,
+                .tiptap ol.tip-tap-minimalist a:hover,
+                .tiptap ul.course-module a:hover,
+                .tiptap ol.course-module a:hover {
+                    color: #4338CA;
+                }
                 .tiptap code {
                     background: #F3F4F6;
                     border-radius: 0.25rem;
