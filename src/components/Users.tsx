@@ -75,9 +75,19 @@ interface Order {
     name: string | null;
     email: string;
   } | null;
+  lead?: {
+    name: string | null;
+    email: string;
+  } | null;
+  guestEmail?: string | null;
   items: {
     course: {
-      title: string;
+      title?: string;
+    };
+  }[];
+  bundleItems?: {
+    bundle?: {
+      name?: string;
     };
   }[];
   paymentTransaction: {
@@ -929,14 +939,31 @@ const Dashboard: React.FC = () => {
                       <TableCell className="font-mono text-xs">{order.orderId || order.id.substring(0, 8)}...</TableCell>
                       <TableCell>
                         <div className="flex flex-col">
-                          <span className="font-medium">{order.user?.name || 'Guest'}</span>
-                          <span className="text-xs text-muted-foreground">{order.user?.email || 'N/A'}</span>
+                          <span className="font-medium">{order.user?.name || order.lead?.name || 'Guest'}</span>
+                          <span className="text-xs text-muted-foreground">{order.user?.email || order.lead?.email || order.guestEmail || 'N/A'}</span>
                         </div>
                       </TableCell>
                       <TableCell>
-                        {order.items.map((item, idx) => (
-                          <div key={idx} className="text-sm">{item.course.title}</div>
-                        ))}
+                        <div className="mb-2">
+                          <Badge variant="secondary" className="text-xs">
+                            {((order.items?.length || 0) + (order.bundleItems?.length || 0))} products
+                          </Badge>
+                        </div>
+                        <div className="flex flex-wrap gap-1">
+                          {order.bundleItems?.map((item, idx) => (
+                            <Badge key={`bundle-${idx}`} variant="outline" className="text-xs border-purple-200 text-purple-700">
+                              Bundle: {item.bundle?.name || 'Unnamed Bundle'}
+                            </Badge>
+                          ))}
+                          {order.items?.map((item, idx) => (
+                            <Badge key={`course-${idx}`} variant="outline" className="text-xs">
+                              Course: {item.course?.title || 'Untitled Course'}
+                            </Badge>
+                          ))}
+                          {(!order.bundleItems || order.bundleItems.length === 0) && (!order.items || order.items.length === 0) && (
+                            <span className="text-sm text-muted-foreground">No items</span>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell>₹{order.totalAmount.toLocaleString()}</TableCell>
                       <TableCell>

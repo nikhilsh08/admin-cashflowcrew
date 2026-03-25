@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Mail, Phone, Calendar, CreditCard, User as UserIcon, BookOpen } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, Calendar, CreditCard, User as UserIcon, BookOpen, Package } from 'lucide-react';
 
 interface OrderItem {
     id: string;
@@ -14,6 +14,18 @@ interface OrderItem {
     course: {
         title: string;
         price: number;
+    };
+}
+
+interface BundleOrderItem {
+    id: string;
+    price: number;
+    bundle: {
+        name: string;
+        slug: string;
+        price: number;
+        originalPrice: number | null;
+        courseIds: string[];
     };
 }
 
@@ -30,6 +42,7 @@ interface PaymentTransaction {
 interface OrderDetail {
     id: string;
     totalAmount: number;
+    discountAmount: number;
     status: string;
     createdAt: string;
     orderId: string | null;
@@ -44,6 +57,14 @@ interface OrderDetail {
         phone: string | null;
     } | null;
     items: OrderItem[];
+    bundleItems: BundleOrderItem[];
+    purchasedCourseDetails?: {
+        id: string;
+        title: string;
+        price: number;
+        source: 'DIRECT' | 'BUNDLE';
+        bundleNames?: string[];
+    }[];
     paymentTransaction: PaymentTransaction | null;
     guestEmail: string | null;
     guestPhone: string | null;
@@ -111,6 +132,7 @@ const OrderDetails: React.FC = () => {
     const userEmail = order.user?.email || order.lead?.email || order.guestEmail || 'N/A';
     const userName = order.user?.name || order.lead?.name || 'Guest';
     const userPhone = order.user?.phone || order.lead?.phone || order.guestPhone || 'N/A';
+    const productCount = (order.items?.length || 0) + (order.bundleItems?.length || 0);
 
     const getStatusColor = (status: string) => {
         switch (status) {
@@ -132,7 +154,10 @@ const OrderDetails: React.FC = () => {
                     </Button>
                     <div>
                         <h1 className="text-2xl font-bold text-gray-900">Order Details</h1>
-                        <p className="text-sm text-gray-500">ID: {order.orderId || order.id}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                            <p className="text-sm text-gray-500">ID: {order.orderId || order.id}</p>
+                            <Badge variant="secondary" className="text-xs">{productCount} products</Badge>
+                        </div>
                     </div>
                 </div>
                 <Badge variant={getStatusColor(order.status) as any} className="text-sm px-3 py-1">
@@ -153,23 +178,108 @@ const OrderDetails: React.FC = () => {
                         </CardHeader>
                         <CardContent>
                             <div className="space-y-4">
-                                {order.items.map((item) => (
-                                    <div key={item.id} className="flex items-start justify-between p-4 border rounded-lg bg-white">
-                                        <div>
-                                            <h4 className="font-semibold text-lg">{item.course.title}</h4>
-                                            <p className="text-sm text-gray-500">Course Type: Recorded</p> {/* Assumption based on schema default */}
+                                {/* Bundle Items */}
+                                {order.bundleItems && order.bundleItems.length > 0 && (
+                                    <>
+                                        <div className="text-sm font-medium text-gray-500 flex items-center gap-2">
+                                            <Package className="w-4 h-4" />
+                                            Bundles
                                         </div>
-                                        <div className="font-semibold">
-                                            ₹{item.price.toLocaleString()}
+                                        {order.bundleItems.map((item) => (
+                                            <div key={item.id} className="flex items-start justify-between p-4 border rounded-lg bg-gradient-to-r from-purple-50 to-blue-50 border-purple-200">
+                                                <div>
+                                                    <h4 className="font-semibold text-lg">{item.bundle.name}</h4>
+                                                    <p className="text-sm text-gray-500">
+                                                        Bundle • {item.bundle.courseIds?.length || 0} courses included
+                                                    </p>
+                                                    {item.bundle.originalPrice && (
+                                                        <p className="text-xs text-green-600 mt-1">
+                                                            Saved ₹{(item.bundle.originalPrice - item.price).toLocaleString()}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                                <div className="text-right">
+                                                    <div className="font-semibold">
+                                                        ₹{item.price.toLocaleString()}
+                                                    </div>
+                                                    {item.bundle.originalPrice && (
+                                                        <div className="text-sm text-gray-400 line-through">
+                                                            ₹{item.bundle.originalPrice.toLocaleString()}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                        {order.items.length > 0 && <Separator className="my-4" />}
+                                    </>
+                                )}
+
+                                {/* Individual Course Items */}
+                                {order.items.length > 0 && (
+                                    <>
+                                        <div className="text-sm font-medium text-gray-500 flex items-center gap-2">
+                                            <BookOpen className="w-4 h-4" />
+                                            Individual Courses
                                         </div>
+                                        {order.items.map((item) => (
+                                            <div key={item.id} className="flex items-start justify-between p-4 border rounded-lg bg-white">
+                                                <div>
+                                                    <h4 className="font-semibold text-lg">{item.course.title}</h4>
+                                                    <p className="text-sm text-gray-500">Course Type: Recorded</p>
+                                                </div>
+                                                <div className="font-semibold">
+                                                    ₹{item.price.toLocaleString()}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </>
+                                )}
+
+                                {/* Empty State */}
+                                {order.items.length === 0 && (!order.bundleItems || order.bundleItems.length === 0) && (
+                                    <div className="text-center py-8 text-gray-500">
+                                        No items found in this order
                                     </div>
-                                ))}
+                                )}
 
                                 <Separator className="my-4" />
 
-                                <div className="flex justify-between items-center text-lg font-bold">
-                                    <span>Total Amount</span>
-                                    <span>₹{order.totalAmount.toLocaleString()}</span>
+                                {order.purchasedCourseDetails && order.purchasedCourseDetails.length > 0 && (
+                                    <>
+                                        <div className="text-sm font-medium text-gray-500 flex items-center gap-2">
+                                            <BookOpen className="w-4 h-4" />
+                                            Purchased Course Details
+                                        </div>
+                                        <div className="space-y-2">
+                                            {order.purchasedCourseDetails.map((course, index) => (
+                                                <div key={`${course.id}-${course.source}-${index}`} className="flex items-start justify-between p-3 border rounded-lg bg-gray-50">
+                                                    <div>
+                                                        <div className="font-medium text-sm">{course.title}</div>
+                                                        <div className="text-xs text-gray-500 mt-1 flex items-center gap-2">
+                                                            <Badge variant="outline" className="text-[10px] h-5">
+                                                                {course.source === 'DIRECT' ? 'Direct' : 'Bundle'}
+                                                            </Badge>
+                                                            {course.bundleNames && course.bundleNames.length > 0 && (
+                                                                <span>From: {course.bundleNames.join(', ')}</span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <div className="font-semibold text-sm">₹{course.price.toLocaleString()}</div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <Separator className="my-4" />
+                                    </>
+                                )}
+
+                                {/* Order Summary */}
+                                <div className="space-y-2">
+                                    {order.discountAmount > 0 && (
+                                        <div className="flex justify-between items-center text-sm text-green-600">
+                                            <span>Discount Applied</span>
+                                            <span>-₹{order.discountAmount.toLocaleString()}</span>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </CardContent>
