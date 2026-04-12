@@ -42,7 +42,7 @@ The source directory contains the core logic of the application:
 - `/src/App.tsx`: The heart of the routing. Maps URLs (e.g., `/admin/users`) to specific Components and handles the `AdminLayout` wrapper.
 - `/src/_authContext`: Contains the Redux Toolkit configuration (`store.ts`) and the specific `slice.ts` managing admin session state.
 - `/src/components`: The primary views and features:
-  - `Dashboard/`: Contains sub-components for rendering Recharts statistics.
+  - `Dashboard/`: Contains sub-components for rendering Recharts statistics, handling CSV exports, tracking transaction status, sending automated emails, and managing week-level filters.
   - `AdminLayout.tsx` / `AdminSidebar.tsx`: The consistent structural shell around all admin pages.
   - `Users.tsx`: Renders data grids displaying all `User` and `Lead` objects.
   - `MasterClassManagement.tsx`: The UI for creating `Course` objects, associating TrainerCentral links, and setting pricing. Includes optional rich text editor for detailed course content.
@@ -60,9 +60,11 @@ The source directory contains the core logic of the application:
     - Color and highlighting
     - Subscript and superscript
     - Undo/redo functionality
-  - `CouponsManagement.tsx`: For managing discount codes and limits.
+  - `CouponsManagement.tsx`: For managing discount codes (percentage/fixed) and usage limits across specific or all courses.
   - `ImageManagement.tsx`: For uploading and managing images used in content.
   - `CategoryManagement.tsx`: For managing product/course categories.
+  - `BundleManagement.tsx`: For creating and managing course bundles with special pricing and combined features.
+  - `EmailTemplate.tsx`: For uploading CSV lists to filter users (e.g., by reconcile status) and sending out targeted email campaigns.
 - `/src/lib`: Standard utility functions, class merging helpers (`utils.ts`), UploadThing configs, and custom hooks.
 - `/src/components/ui`: Radix UI-based component library for consistent UI elements.
 
@@ -232,6 +234,22 @@ POST /api/admin/coupons
 PUT /api/admin/coupons/:id
 DELETE /api/admin/coupons/:id
 ```
+
+### Bundles
+```
+GET /api/admin/bundles
+Response: { success: boolean, bundles: Bundle[] }
+
+POST /api/admin/bundles
+Body: { name, slug, description, price, courseIds, features, membershipDuration, isActive, isPublished }
+Response: { success: boolean, bundle: Bundle }
+
+PATCH /api/admin/bundles/:id
+Body: Partial<Bundle>
+Response: { success: boolean, bundle: Bundle }
+```
+
+
 
 ### Images
 ```
