@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, Mail, Phone, Calendar, CreditCard, User as UserIcon, BookOpen, Package } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, Calendar, CreditCard, User as UserIcon, BookOpen, Package, TrendingUp, Tag } from 'lucide-react';
 
 interface OrderItem {
     id: string;
@@ -46,6 +46,7 @@ interface OrderDetail {
     status: string;
     createdAt: string;
     orderId: string | null;
+    couponId: string | null;
     user: {
         name: string | null;
         email: string;
@@ -68,6 +69,12 @@ interface OrderDetail {
     paymentTransaction: PaymentTransaction | null;
     guestEmail: string | null;
     guestPhone: string | null;
+    // UTM Marketing Attribution
+    utmSource: string | null;
+    utmMedium: string | null;
+    utmCampaign: string | null;
+    utmTerm: string | null;
+    utmContent: string | null;
 }
 
 const OrderDetails: React.FC = () => {
@@ -274,12 +281,27 @@ const OrderDetails: React.FC = () => {
 
                                 {/* Order Summary */}
                                 <div className="space-y-2">
+                                    {order.couponId && (
+                                        <div className="flex justify-between items-center text-sm text-purple-600">
+                                            <span className="flex items-center gap-1">
+                                                <Tag className="w-3 h-3" />
+                                                Coupon Applied
+                                            </span>
+                                            <span className="font-mono text-xs bg-purple-50 border border-purple-200 px-2 py-0.5 rounded">
+                                                {order.couponId}
+                                            </span>
+                                        </div>
+                                    )}
                                     {order.discountAmount > 0 && (
                                         <div className="flex justify-between items-center text-sm text-green-600">
                                             <span>Discount Applied</span>
                                             <span>-₹{order.discountAmount.toLocaleString()}</span>
                                         </div>
                                     )}
+                                    <div className="flex justify-between items-center font-semibold text-base border-t pt-2 mt-2">
+                                        <span>Total Paid</span>
+                                        <span>₹{order.totalAmount.toLocaleString()}</span>
+                                    </div>
                                 </div>
                             </div>
                         </CardContent>
@@ -337,7 +359,9 @@ const OrderDetails: React.FC = () => {
                                 </div>
                                 <div>
                                     <p className="font-medium">{userName}</p>
-                                    <p className="text-xs text-gray-500">Customer</p>
+                                    <p className="text-xs text-gray-500">
+                                        {order.user ? 'Registered User' : order.lead ? 'Lead (Guest)' : 'Guest'}
+                                    </p>
                                 </div>
                             </div>
 
@@ -346,7 +370,7 @@ const OrderDetails: React.FC = () => {
                             <div className="space-y-3">
                                 <div className="flex items-center gap-3">
                                     <Mail className="w-4 h-4 text-gray-400" />
-                                    <span className="text-sm">{userEmail}</span>
+                                    <span className="text-sm break-all">{userEmail}</span>
                                 </div>
                                 <div className="flex items-center gap-3">
                                     <Phone className="w-4 h-4 text-gray-400" />
@@ -355,12 +379,78 @@ const OrderDetails: React.FC = () => {
                                 <div className="flex items-center gap-3">
                                     <Calendar className="w-4 h-4 text-gray-400" />
                                     <span className="text-sm">
-                                        Registered: {order.createdAt ? new Date(order.createdAt).toLocaleDateString() : 'N/A'}
+                                        Order Date: {order.createdAt ? new Date(order.createdAt).toLocaleString() : 'N/A'}
                                     </span>
                                 </div>
                             </div>
                         </CardContent>
                     </Card>
+
+                    {/* UTM / Marketing Attribution */}
+                    {(order.utmSource || order.utmMedium || order.utmCampaign || order.utmTerm || order.utmContent) && (
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <TrendingUp className="w-5 h-5 text-gray-500" />
+                                    Marketing Attribution
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="space-y-3">
+                                    {order.utmSource && (
+                                        <div>
+                                            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Source</p>
+                                            <p className="text-sm font-medium mt-0.5">
+                                                <span className="inline-block bg-blue-50 text-blue-700 border border-blue-200 rounded px-2 py-0.5 font-mono text-xs">
+                                                    {order.utmSource}
+                                                </span>
+                                            </p>
+                                        </div>
+                                    )}
+                                    {order.utmMedium && (
+                                        <div>
+                                            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Medium</p>
+                                            <p className="text-sm font-medium mt-0.5">
+                                                <span className="inline-block bg-green-50 text-green-700 border border-green-200 rounded px-2 py-0.5 font-mono text-xs">
+                                                    {order.utmMedium}
+                                                </span>
+                                            </p>
+                                        </div>
+                                    )}
+                                    {order.utmCampaign && (
+                                        <div>
+                                            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Campaign</p>
+                                            <p className="text-sm font-medium mt-0.5">
+                                                <span className="inline-block bg-orange-50 text-orange-700 border border-orange-200 rounded px-2 py-0.5 font-mono text-xs break-all">
+                                                    {order.utmCampaign}
+                                                </span>
+                                            </p>
+                                        </div>
+                                    )}
+                                    {order.utmTerm && (
+                                        <div>
+                                            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Term</p>
+                                            <p className="text-sm font-medium mt-0.5">
+                                                <span className="inline-block bg-purple-50 text-purple-700 border border-purple-200 rounded px-2 py-0.5 font-mono text-xs break-all">
+                                                    {order.utmTerm}
+                                                </span>
+                                            </p>
+                                        </div>
+                                    )}
+                                    {order.utmContent && (
+                                        <div>
+                                            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide">Content</p>
+                                            <p className="text-sm font-medium mt-0.5">
+                                                <span className="inline-block bg-pink-50 text-pink-700 border border-pink-200 rounded px-2 py-0.5 font-mono text-xs break-all">
+                                                    {order.utmContent}
+                                                </span>
+                                            </p>
+                                        </div>
+                                    )}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
                 </div>
             </div>
         </div>
