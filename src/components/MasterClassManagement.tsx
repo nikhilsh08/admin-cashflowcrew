@@ -42,6 +42,10 @@ interface Masterclass {
     visibility: 'show' | 'hide';
     isPublished?: boolean;
     seatsSold?: number;
+    batchGroup?: string;
+    bookingCloseAt?: string;
+    startTime?: string;
+    language?: string;
     // Legacy/display fields
     registrations?: number;
     location?: string;
@@ -91,6 +95,10 @@ const MasterclassManagement = () => {
             tcCourseUrl: "",
             startDate: "",
             maxSeats: undefined,
+            batchGroup: "",
+            bookingCloseAt: "",
+            startTime: "",
+            language: "",
             categoryId: "",
             staticRoute: "",
             visibility: "show",
@@ -194,6 +202,10 @@ const MasterclassManagement = () => {
             tcCourseUrl: "",
             startDate: "",
             maxSeats: undefined,
+            batchGroup: "",
+            bookingCloseAt: "",
+            startTime: "",
+            language: "",
             categoryId: "",
             staticRoute: "",
             visibility: "show",
@@ -215,9 +227,17 @@ const MasterclassManagement = () => {
             formattedDate = `${dateObj.getFullYear()}-${pad(dateObj.getMonth() + 1)}-${pad(dateObj.getDate())}T${pad(dateObj.getHours())}:${pad(dateObj.getMinutes())}`;
         }
 
+        const pad = (n: number) => n.toString().padStart(2, '0');
+        const toLocal = (v?: string) => {
+            if (!v) return "";
+            const d = new Date(v);
+            return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        };
+
         reset({
             ...masterclass,
-            startDate: formattedDate
+            startDate: formattedDate,
+            bookingCloseAt: toLocal(masterclass.bookingCloseAt)
         });
         setView("form");
     };
@@ -242,6 +262,10 @@ const MasterclassManagement = () => {
             tcCourseUrl: nullIfEmpty(data.tcCourseUrl),
             startDate: data.startDate ? new Date(data.startDate).toISOString() : null,
             maxSeats: data.maxSeats ? Number(data.maxSeats) : null,
+            batchGroup: nullIfEmpty(data.batchGroup),
+            bookingCloseAt: data.bookingCloseAt ? new Date(data.bookingCloseAt).toISOString() : null,
+            startTime: nullIfEmpty(data.startTime),
+            language: nullIfEmpty(data.language),
             categoryId: data.categoryId,
             staticRoute: nullIfEmpty(data.staticRoute),
             visibility: data.visibility || 'show',
@@ -449,6 +473,24 @@ const MasterclassManagement = () => {
                                             <div>
                                                 <Label className="py-1">Max Seats</Label>
                                                 <Input type="number" {...register("maxSeats")} />
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <div>
+                                                <Label className="py-1">Batch group (type mmf for Master Mutual Funds)</Label>
+                                                <Input {...register("batchGroup")} placeholder="mmf" />
+                                            </div>
+                                            <div>
+                                                <Label className="py-1">Booking closes at</Label>
+                                                <Input type="datetime-local" {...register("bookingCloseAt")} />
+                                            </div>
+                                            <div>
+                                                <Label className="py-1">Start time shown on page (optional)</Label>
+                                                <Input {...register("startTime")} placeholder="11:00 AM IST" />
+                                            </div>
+                                            <div>
+                                                <Label className="py-1">Language shown on page (optional)</Label>
+                                                <Input {...register("language")} placeholder="English" />
                                             </div>
                                         </div>
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
