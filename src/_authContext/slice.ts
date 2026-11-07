@@ -1,8 +1,7 @@
 // @/_authContext/slice.ts
 import { createSlice } from "@reduxjs/toolkit";
-import type { PayloadAction } from "@reduxjs/toolkit";
+import type { PayloadAction, ThunkDispatch, UnknownAction } from "@reduxjs/toolkit";
 import axios from "axios";
-import Cookies from "js-cookie";
 
 // Types
 export interface AdminUser {
@@ -26,6 +25,9 @@ interface AdminState {
   isAuthenticated: boolean;
   loader: boolean;
   error: string | null;
+  // true once the initial session check has resolved, so route guards can
+  // tell "not logged in" apart from "still checking"
+  authChecked: boolean;
 }
 
 // Redux Store Type
@@ -34,26 +36,31 @@ export interface RootState {
 }
 
 // Dispatch Type
-export type AppDispatch = any;
+export type AppDispatch = ThunkDispatch<RootState, unknown, UnknownAction>;
 
-// ✅ Initialize axios headers if token exists in cookies on app load
-const initializeAuthHeaders = () => {
-  const token = Cookies.get("authjs.csrf-token");
-  if (token) {
-    axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
-    axios.defaults.withCredentials = true;
-    localStorage.setItem("authjs.csrf-token", token);
-  }
-};
+interface SessionUser {
+  id?: string;
+  _id?: string;
+  email: string;
+  name?: string;
+  firstName?: string;
+  lastName?: string;
+  role: string;
+}
 
-// Call this immediately when module loads
-initializeAuthHeaders();
+interface RequestError {
+  response?: { status?: number; data?: { error?: string; message?: string } };
+  config?: { url?: string };
+}
+
+const SERVER_URL = import.meta.env.VITE_SERVER_URL;
 
 const initialState: AdminState = {
   user: null,
   isAuthenticated: false,
   loader: false,
   error: null,
+  authChecked: false,
 };
 
 export const adminSlice = createSlice({
@@ -69,136 +76,89 @@ export const adminSlice = createSlice({
       state.isAuthenticated = true;
       state.user = action.payload;
       state.error = null;
+      state.authChecked = true;
     },
     loginFailure: (state, action: PayloadAction<string>) => {
       state.loader = false;
       state.isAuthenticated = false;
       state.user = null;
       state.error = action.payload;
+      state.authChecked = true;
     },
     logout: (state) => {
       state.loader = false;
       state.isAuthenticated = false;
       state.user = null;
       state.error = null;
-
-      // remove token from cookies
-      Cookies.remove("authjs.csrf-token");
-      delete axios.defaults.headers.common["Authorization"];
-      localStorage.removeItem("authjs.csrf-token");
+      state.authChecked = true;
     },
     clearError: (state) => {
       state.error = null;
     },
-    // ✅ Add action to set initial auth state
-    setInitialAuth: (state) => {
-      const token = Cookies.get("authjs.csrf-token");
-      if (token) {
-        state.loader = true; // Show loading while verifying
-      }
-    },
   },
 });
 
-// Async thunk for login
+const toAdminUser = (user: SessionUser): AdminUser => ({
+  id: user.id ?? user._id ?? "",
+  email: user.email,
+  name: user.name ?? `${user.firstName ?? ""} ${user.lastName ?? ""}`.trim(),
+  firstName: user.firstName,
+  lastName: user.lastName,
+  role: user.role,
+  isAdmin: true,
+  permissions: ["read", "write", "delete"],
+});
+
+// The NextAuth session cookie is sent automatically (withCredentials); the
+// server re-checks the admin role on every call.
+export const fetchAdminSession = async (): Promise<AdminUser> => {
+  const response = await axios.get(`${SERVER_URL}/api/admin/session`, {
+    withCredentials: true,
+  });
+  return toAdminUser(response.data.user);
+};
+
 export const loginAdmin =
   (credentials: AdminCredentials) => async (dispatch: AppDispatch): Promise<void> => {
     dispatch(loginStart());
 
     try {
-      // Step 1: check if admin
-      await axios.post(
-        `${import.meta.env.VITE_SERVER_URL}/api/admin/is-admin`,
-        { email: credentials.email },
-        { withCredentials: true }
-      );
+      await axios.post(`${SERVER_URL}/api/auth/login`, credentials, {
+        withCredentials: true,
+      });
 
-      // Step 2: login request
-      const loginResponse = await axios.post(
-        `${import.meta.env.VITE_SERVER_URL}/api/auth/login`,
-        credentials,
-        { withCredentials: true }
-      );
-
-      const userData = loginResponse.data;
-      console.log("userData:", userData);
-
-      const adminUser: AdminUser = {
-        id: userData.user._id,
-        email: userData.user.email,
-        name: `${userData.user.firstName ?? ""} ${userData.user.lastName ?? ""}`,
-        firstName: userData.user.firstName,
-        lastName: userData.user.lastName,
-        role: userData.user.role,
-        isAdmin: userData.user.isAdmin,
-        permissions: userData.user.isAdmin
-          ? ["read", "write", "delete"]
-          : ["read"],
-      };
-
+      // /api/auth/login signs in any user; the session endpoint is what
+      // proves the admin role.
+      const adminUser = await fetchAdminSession();
       dispatch(loginSuccess(adminUser));
-      axios.defaults.withCredentials = true;
-
-
-    } catch (err: any) {
-      console.error("Login error:", err.response?.data || err.message);
-      dispatch(
-        loginFailure(
-          err.response?.data?.message || "Login failed. Please try again."
-        )
-      );
+    } catch (error) {
+      const err = error as RequestError;
+      const status = err.response?.status;
+      const url = err.config?.url ?? "";
+      const message =
+        status === 401 && url.endsWith("/api/admin/session")
+          ? "This account does not have admin access."
+          : err.response?.data?.error ||
+            err.response?.data?.message ||
+            "Login failed. Please try again.";
+      dispatch(loginFailure(message));
     }
   };
 
-// Check if admin is already logged in
+// Restore the session on page load / refresh.
 export const checkAdminAuth =
   () => async (dispatch: AppDispatch): Promise<void> => {
-    const token = Cookies.get("authjs.csrf-token");
-
-    if (!token) {
-      dispatch(loginFailure("No token found"));
-      return;
-    }
-
     dispatch(loginStart());
 
-    // ✅ Ensure axios headers are set
-    axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
-    axios.defaults.withCredentials = true;
-    localStorage.setItem("authjs.csrf-token", token);
-
     try {
-      const response = await axios.get(
-        `${import.meta.env.VITE_SERVER_URL}/api/admin/verify`,
-        { withCredentials: true }
-      );
-
-      const userData = response.data;
-
-      const adminUser: AdminUser = {
-        id: userData.user._id,
-        email: userData.user.email,
-        name: `${userData.user.firstName ?? ""} ${userData.user.lastName ?? ""}`,
-        firstName: userData.user.firstName,
-        lastName: userData.user.lastName,
-        role: userData.user.role,
-        isAdmin: userData.user.isAdmin,
-        permissions: userData.user.isAdmin
-          ? ["read", "write", "delete"]
-          : ["read"],
-      };
-
-      dispatch(loginSuccess(adminUser));
-    } catch (err: any) {
-      console.error("Auth check failed:", err.response?.data || err.message);
-      Cookies.remove("authjs.csrf-token");
-      delete axios.defaults.headers.common["Authorization"];
-      localStorage.removeItem("authjs.csrf-token");
-      dispatch(loginFailure("Session expired. Please login again."));
+      dispatch(loginSuccess(await fetchAdminSession()));
+    } catch {
+      // Not logged in is the normal cold-start state, not an error to show.
+      dispatch(loginFailure(""));
     }
   };
 
-export const { loginStart, loginSuccess, loginFailure, logout, clearError, setInitialAuth } =
+export const { loginStart, loginSuccess, loginFailure, logout, clearError } =
   adminSlice.actions;
 
 export default adminSlice.reducer;
