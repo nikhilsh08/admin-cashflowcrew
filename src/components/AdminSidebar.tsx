@@ -89,6 +89,16 @@ const navMain = [
     icon: Package,
   },
   {
+    title: "Batches",
+    url: "/admin/batches",
+    icon: BarChart3,
+  },
+  {
+    title: "Batch settings",
+    url: "/admin/batch-settings",
+    icon: Settings,
+  },
+  {
     title: "Categories",
     url: "/admin/categories",
     icon: Frame, // Using Frame icon as a placeholder for Categories
