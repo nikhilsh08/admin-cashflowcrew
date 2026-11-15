@@ -13,6 +13,8 @@ type Status = "live" | "no_batch_on_sale" | "course_missing" | "course_unpublish
 
 interface LandingPage {
   key: string;
+  // "v10" | "v20" | "v30": the value chosen on the course form.
+  page: string;
   name: string;
   url: string;
   paths: { landing: string; checkout: string; thankYou: string };
@@ -54,7 +56,7 @@ interface Tracking {
 const STATUS: Record<Status, { label: string; tone: "ok" | "warn" | "bad"; fix?: { text: string; to: string } }> = {
   live: { label: "Live, selling", tone: "ok" },
   no_batch_on_sale: { label: "No batch on sale", tone: "warn", fix: { text: "Open a batch", to: "/admin/batches" } },
-  course_missing: { label: "Course not created", tone: "bad", fix: { text: "Create the course", to: "/admin/masterclasses" } },
+  course_missing: { label: "No course linked", tone: "bad", fix: { text: "Link a course in Masterclasses", to: "/admin/masterclasses" } },
   course_unpublished: { label: "Course not published", tone: "bad", fix: { text: "Publish the course", to: "/admin/masterclasses" } },
   not_sold_in_batches: { label: "Course not sold in batches", tone: "bad", fix: { text: "Set 'Sold in batches'", to: "/admin/masterclasses" } },
 };
@@ -117,7 +119,7 @@ const LandingPagesPage = () => {
     <div className="space-y-6 max-w-6xl">
       <div className="flex items-center justify-between gap-4">
         <p className="text-sm text-muted-foreground">
-          The three workshop pages. Dates, price and seats come from the batch on sale (Batches); a change shows on the page within about a minute.
+          Each page is linked to its own course (Masterclasses → Workshop landing page). Dates, time, price and seats come from that course's batch on sale (Batches); a change shows on the page within about a minute.
         </p>
         <Button variant="outline" size="sm" onClick={load} disabled={loading}>
           <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
@@ -143,11 +145,17 @@ const LandingPagesPage = () => {
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
                 <div>
-                  <p className="text-muted-foreground">Course</p>
-                  <p>{p.course ? p.course.title : <em>Not found (slug {p.key.startsWith("mmf") ? "master-mutual-funds-invest-smarter" : "master-personal-finance-with-ai"})</em>}</p>
+                  <p className="text-muted-foreground">Linked course</p>
+                  <p>
+                    {p.course ? (
+                      p.course.title
+                    ) : (
+                      <em>None. Create or edit a course and set "Workshop landing page" to /{p.page}.</em>
+                    )}
+                  </p>
                   {p.sharesCourseWith.length > 0 && (
-                    <p className="text-xs text-muted-foreground">
-                      Same course and batches as {p.sharesCourseWith.map(nameOf).join(", ")}: seats are shared.
+                    <p className="text-xs text-red-700">
+                      Also linked to {p.sharesCourseWith.map(nameOf).join(", ")}. Each page should have its own course.
                     </p>
                   )}
                 </div>

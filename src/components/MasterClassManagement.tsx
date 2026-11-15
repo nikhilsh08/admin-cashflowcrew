@@ -41,9 +41,12 @@ interface Masterclass {
     staticRoute?: string;
     visibility: 'show' | 'hide';
     isPublished?: boolean;
-    // Sold in batches on a workshop landing page (/v10, /v20); dates and
-    // price then come from Batches / Batch settings.
+    // Sold in batches on a workshop landing page; dates and price then come
+    // from Batches / Batch settings.
     useBatches?: boolean | string;
+    // The workshop landing page this course is linked to: "v10" | "v20" |
+    // "v30", or "" for none. One course per page.
+    landingPage?: string | null;
     seatsSold?: number;
     // Legacy/display fields
     registrations?: number;
@@ -99,12 +102,15 @@ const MasterclassManagement = () => {
             visibility: "show",
             isPublished: true,
             useBatches: false,
+            landingPage: "",
             duration: "",
         },
     });
 
     const watchType = watch("type");
-    const watchUseBatches = String(watch("useBatches")) === "true";
+    // A course linked to a landing page is always sold in batches.
+    const watchLandingPage = watch("landingPage") || "";
+    const watchUseBatches = watchLandingPage !== "";
 
     const [categories, setCategories] = useState<Category[]>([]);
 
@@ -204,6 +210,7 @@ const MasterclassManagement = () => {
             visibility: "show",
             isPublished: true,
             useBatches: false,
+            landingPage: "",
             duration: "",
         });
         setView("form");
@@ -225,6 +232,7 @@ const MasterclassManagement = () => {
             ...masterclass,
             startDate: formattedDate,
             useBatches: Boolean(masterclass.useBatches),
+            landingPage: masterclass.landingPage || "",
         });
         setView("form");
     };
@@ -253,7 +261,9 @@ const MasterclassManagement = () => {
             staticRoute: nullIfEmpty(data.staticRoute),
             visibility: data.visibility || 'show',
             isPublished: typeof data.isPublished === 'string' ? data.isPublished === 'true' : (data.isPublished ?? true),
-            useBatches: String(data.useBatches) === 'true',
+            // "none" unlinks; a linked course is always sold in batches.
+            landingPage: data.landingPage || 'none',
+            useBatches: Boolean(data.landingPage),
             duration: (data.type === 'LIVE' || data.type === 'HYBRID') ? (nullIfEmpty(data.duration)) : null,
         };
 
@@ -425,19 +435,20 @@ const MasterclassManagement = () => {
                                     </div>
                                 </div>
 
-                                {/* Sold in batches: workshop landing pages (/v10 Master Mutual Funds, /v20 Master Personal Finance with AI) */}
+                                {/* Link to a workshop landing page: each page (/v10, /v20, /v30) sells its own course. */}
                                 <div>
-                                    <Label className="py-1">Sold in batches (workshop landing page)</Label>
-                                    <select {...register("useBatches")} className="w-full border rounded px-3 py-2">
-                                        <option value="false">No — normal course</option>
-                                        <option value="true">Yes — dates and price come from Batches</option>
+                                    <Label className="py-1">Workshop landing page</Label>
+                                    <select {...register("landingPage")} className="w-full border rounded px-3 py-2" data-testid="landing-page-select">
+                                        <option value="">None — normal course</option>
+                                        <option value="v10">/v10 — Master Mutual Funds page</option>
+                                        <option value="v20">/v20 — Master Personal Finance with AI page</option>
+                                        <option value="v30">/v30 — Master Personal Finance with AI page (new design)</option>
                                     </select>
-                                    {watchUseBatches && (
-                                        <p className="text-sm text-gray-600 mt-1">
-                                            After saving, set it up in Batch settings and Batches, then open a batch to put it on sale.
-                                            The title "Master Personal Finance with AI" gives the slug the /v20 and /v30 pages read.
-                                        </p>
-                                    )}
+                                    <p className="text-sm text-gray-600 mt-1">
+                                        {watchUseBatches
+                                            ? `This course is sold on /${watchLandingPage}. Its dates, time and price come from its own Batches. After saving, fill in Batch settings, add a batch and open it.`
+                                            : "Each landing page is linked to one course of its own. Choose a page to sell this course there."}
+                                    </p>
                                 </div>
 
                                 {/* Price + Original Price */}
