@@ -12,6 +12,8 @@ const SERVER = import.meta.env.VITE_SERVER_URL;
 interface BatchCourse {
   id: string;
   title: string;
+  // The workshop landing page this course is sold on ("/v10", "/v20"), if any.
+  landingPath?: string | null;
 }
 
 interface SettingsForm {
@@ -158,7 +160,7 @@ const BatchSettingsPage = () => {
               disabled={loading}
             >
               {courses.map((c) => (
-                <option key={c.id} value={c.id}>{c.title}</option>
+                <option key={c.id} value={c.id}>{c.landingPath ? `${c.title} (${c.landingPath})` : c.title}</option>
               ))}
             </select>
           </div>

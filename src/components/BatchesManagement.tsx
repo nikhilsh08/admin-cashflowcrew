@@ -44,7 +44,11 @@ export interface AdminBatch {
 interface BatchCourse {
   id: string;
   title: string;
+  // The workshop landing page this course is sold on ("/v10", "/v20"), if any.
+  landingPath?: string | null;
 }
+
+const courseLabel = (c: BatchCourse) => (c.landingPath ? `${c.title} (${c.landingPath})` : c.title);
 
 interface FormState {
   courseId: string;
@@ -119,6 +123,10 @@ const BatchesManagement = () => {
   const [editing, setEditing] = useState<AdminBatch | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm());
   const [saving, setSaving] = useState(false);
+  // "" = all courses. Batch numbers restart at 1 for each course.
+  const [courseFilter, setCourseFilter] = useState("");
+  const courseById = new Map(courses.map((c) => [c.id, c]));
+  const shownBatches = courseFilter ? batches.filter((b) => b.courseId === courseFilter) : batches;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -142,7 +150,7 @@ const BatchesManagement = () => {
 
   const openCreate = () => {
     setEditing(null);
-    setForm(emptyForm(courses[0]?.id ?? ""));
+    setForm(emptyForm(courseFilter || courses[0]?.id || ""));
     setDialogOpen(true);
   };
 
@@ -198,6 +206,24 @@ const BatchesManagement = () => {
       toast.success(`Batch ${batch.batchNumber} ${action === "open" ? "opened" : "closed"}`);
       await load();
     } catch (error) {
+      // Only the Zoho keys / WhatsApp link are missing: offer "Open anyway".
+      const canForce = action === "open" && axios.isAxiosError(error) && error.response?.data?.canForce === true;
+      if (canForce) {
+        const ok = window.confirm(
+          `${errorMessage(error, "Setup is incomplete.")}\n\n` +
+            "Open anyway? The batch goes on sale now, but buyers will NOT be registered for the Zoho sessions " +
+            "or sent the WhatsApp link until you add them in Edit. Use this for testing, or add the keys straight after.",
+        );
+        if (!ok) return;
+        try {
+          await axios.post(`${SERVER}/api/admin/batches/${batch.id}/open`, { force: true }, { withCredentials: true });
+          toast.warning(`Batch ${batch.batchNumber} opened without Zoho / WhatsApp. Add them in Edit before real buyers book.`);
+          await load();
+        } catch (forceError) {
+          toast.error(errorMessage(forceError, "Could not open batch"));
+        }
+        return;
+      }
       toast.error(errorMessage(error, `Could not ${action} batch`));
     }
   };
@@ -208,7 +234,20 @@ const BatchesManagement = () => {
         <p className="text-sm text-muted-foreground">
           A batch is on sale while it is OPEN and before its booking close time. No seat limit.
         </p>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          {courses.length > 1 && (
+            <select
+              aria-label="Course"
+              className="border rounded px-3 py-2 text-sm"
+              value={courseFilter}
+              onChange={(e) => setCourseFilter(e.target.value)}
+            >
+              <option value="">All courses</option>
+              {courses.map((c) => (
+                <option key={c.id} value={c.id}>{courseLabel(c)}</option>
+              ))}
+            </select>
+          )}
           <Button variant="outline" onClick={load} disabled={loading}>
             <RefreshCw className="h-4 w-4 mr-2" /> Refresh
           </Button>
@@ -221,7 +260,7 @@ const BatchesManagement = () => {
       {courses.length === 0 && !loading && (
         <Card>
           <CardContent className="py-4 text-sm text-muted-foreground">
-            No course is set up for batches yet. Run the seed script, then configure Batch settings.
+            No course is set up for batches yet. In Courses, edit the course and set "Sold in batches" to Yes, then configure Batch settings.
           </CardContent>
         </Card>
       )}
@@ -232,6 +271,7 @@ const BatchesManagement = () => {
             <TableHeader>
               <TableRow>
                 <TableHead>#</TableHead>
+                <TableHead>Course</TableHead>
                 <TableHead>Saturday</TableHead>
                 <TableHead>Booking closes</TableHead>
                 <TableHead>Start (IST)</TableHead>
@@ -244,16 +284,22 @@ const BatchesManagement = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {batches.length === 0 && (
+              {shownBatches.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={10} className="text-center text-sm text-muted-foreground py-8">
+                  <TableCell colSpan={11} className="text-center text-sm text-muted-foreground py-8">
                     {loading ? "Loading…" : "No batches yet."}
                   </TableCell>
                 </TableRow>
               )}
-              {batches.map((b) => (
+              {shownBatches.map((b) => (
                 <TableRow key={b.id} data-testid={`batch-row-${b.batchNumber}`}>
                   <TableCell className="font-medium">{b.batchNumber}</TableCell>
+                  <TableCell className="text-sm">
+                    {courseById.get(b.courseId)?.title ?? "—"}
+                    {courseById.get(b.courseId)?.landingPath && (
+                      <span className="ml-1 text-xs text-muted-foreground">{courseById.get(b.courseId)?.landingPath}</span>
+                    )}
+                  </TableCell>
                   <TableCell>{b.day1Text || istDate(b.day1StartAt)}</TableCell>
                   <TableCell className="whitespace-nowrap">{istDateTime(b.bookingCloseAt)}</TableCell>
                   <TableCell>{b.startTimeIst}</TableCell>
@@ -309,7 +355,7 @@ const BatchesManagement = () => {
                   required
                 >
                   {courses.map((c) => (
-                    <option key={c.id} value={c.id}>{c.title}</option>
+                    <option key={c.id} value={c.id}>{courseLabel(c)}</option>
                   ))}
                 </select>
               </div>
