@@ -21,6 +21,10 @@ import BlogsManagement from "./components/BlogsManagement";
 import BlogFormPage from "./components/BlogFormPage";
 import BundleManagement from "./components/BundleManagement";
 import RequireAdmin from "./components/RequireAdmin";
+import BatchesManagement from "./components/BatchesManagement";
+import GuestList from "./components/GuestList";
+import BatchSettingsPage from "./components/BatchSettingsPage";
+import LandingPagesPage from "./components/LandingPagesPage";
 
 import AdminLayout from "./components/AdminLayout";
 
@@ -127,6 +131,34 @@ const AppContent: React.FC = () => {
           <RequireAdmin>
             <AdminLayout title="Blogs Management">
               <BlogsManagement />
+            </AdminLayout>
+          </RequireAdmin>
+        } />
+        <Route path="/admin/batches" element={
+          <RequireAdmin>
+            <AdminLayout title="Batches">
+              <BatchesManagement />
+            </AdminLayout>
+          </RequireAdmin>
+        } />
+        <Route path="/admin/batches/:id/guests" element={
+          <RequireAdmin>
+            <AdminLayout title="Guest list">
+              <GuestList />
+            </AdminLayout>
+          </RequireAdmin>
+        } />
+        <Route path="/admin/batch-settings" element={
+          <RequireAdmin>
+            <AdminLayout title="Batch settings">
+              <BatchSettingsPage />
+            </AdminLayout>
+          </RequireAdmin>
+        } />
+        <Route path="/admin/landing-pages" element={
+          <RequireAdmin>
+            <AdminLayout title="Landing pages">
+              <LandingPagesPage />
             </AdminLayout>
           </RequireAdmin>
         } />

@@ -41,6 +41,9 @@ interface Masterclass {
     staticRoute?: string;
     visibility: 'show' | 'hide';
     isPublished?: boolean;
+    // Sold in batches on a workshop landing page (/v10, /v20); dates and
+    // price then come from Batches / Batch settings.
+    useBatches?: boolean | string;
     seatsSold?: number;
     // Legacy/display fields
     registrations?: number;
@@ -95,11 +98,13 @@ const MasterclassManagement = () => {
             staticRoute: "",
             visibility: "show",
             isPublished: true,
+            useBatches: false,
             duration: "",
         },
     });
 
     const watchType = watch("type");
+    const watchUseBatches = String(watch("useBatches")) === "true";
 
     const [categories, setCategories] = useState<Category[]>([]);
 
@@ -198,6 +203,7 @@ const MasterclassManagement = () => {
             staticRoute: "",
             visibility: "show",
             isPublished: true,
+            useBatches: false,
             duration: "",
         });
         setView("form");
@@ -217,7 +223,8 @@ const MasterclassManagement = () => {
 
         reset({
             ...masterclass,
-            startDate: formattedDate
+            startDate: formattedDate,
+            useBatches: Boolean(masterclass.useBatches),
         });
         setView("form");
     };
@@ -246,6 +253,7 @@ const MasterclassManagement = () => {
             staticRoute: nullIfEmpty(data.staticRoute),
             visibility: data.visibility || 'show',
             isPublished: typeof data.isPublished === 'string' ? data.isPublished === 'true' : (data.isPublished ?? true),
+            useBatches: String(data.useBatches) === 'true',
             duration: (data.type === 'LIVE' || data.type === 'HYBRID') ? (nullIfEmpty(data.duration)) : null,
         };
 
@@ -260,7 +268,8 @@ const MasterclassManagement = () => {
                 }
             } catch (error) {
                 console.error("Error updating masterclass:", error);
-                toast.error("Failed to update masterclass. Please try again.");
+                const serverMessage = axios.isAxiosError(error) ? error.response?.data?.message : undefined;
+                toast.error(serverMessage || "Failed to update masterclass. Please try again.");
             }
         } else {
             // create
@@ -416,6 +425,21 @@ const MasterclassManagement = () => {
                                     </div>
                                 </div>
 
+                                {/* Sold in batches: workshop landing pages (/v10 Master Mutual Funds, /v20 Master Personal Finance with AI) */}
+                                <div>
+                                    <Label className="py-1">Sold in batches (workshop landing page)</Label>
+                                    <select {...register("useBatches")} className="w-full border rounded px-3 py-2">
+                                        <option value="false">No — normal course</option>
+                                        <option value="true">Yes — dates and price come from Batches</option>
+                                    </select>
+                                    {watchUseBatches && (
+                                        <p className="text-sm text-gray-600 mt-1">
+                                            After saving, set it up in Batch settings and Batches, then open a batch to put it on sale.
+                                            The title "Master Personal Finance with AI" gives the slug the /v20 and /v30 pages read.
+                                        </p>
+                                    )}
+                                </div>
+
                                 {/* Price + Original Price */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
@@ -475,8 +499,8 @@ const MasterclassManagement = () => {
                                 {/* Trainer Central Details */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
-                                        <Label className="py-1">Trainer Central Course ID *</Label>
-                                        <Input {...register("tcCourseId", { required: "TC Course ID is required" })} />
+                                        <Label className="py-1">Trainer Central Course ID{watchUseBatches ? " (not needed for batch courses)" : " *"}</Label>
+                                        <Input {...register("tcCourseId", { validate: (v) => watchUseBatches || !!v || "TC Course ID is required" })} />
                                         {errors.tcCourseId && <p className="text-red-500 text-sm">{errors.tcCourseId.message}</p>}
                                     </div>
                                     <div>
