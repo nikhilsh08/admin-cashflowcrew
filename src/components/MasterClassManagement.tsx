@@ -67,6 +67,8 @@ const MasterclassManagement = () => {
     const [view, setView] = useState<"list" | "form">("list");
     const [editingMasterclass, setEditingMasterclass] = useState<Masterclass | null>(null);
     const [masterclasses, setMasterclasses] = useState<Masterclass[]>([]);
+    // Until the list has loaded, nothing is known about which page is linked.
+    const [listState, setListState] = useState<"loading" | "ready" | "error">("loading");
     const [showRichContent, setShowRichContent] = useState(false);
 
     // Waitlist State
@@ -134,8 +136,10 @@ const MasterclassManagement = () => {
             const res = await axios.get(`${import.meta.env.VITE_SERVER_URL}/api/admin/masterclass/all-classes`, { withCredentials: true });
             console.log("responsesss", res.data.data) // Verify if data.data or data.courses
             setMasterclasses(res.data.courses || res.data.data || []);
+            setListState("ready");
         } catch (error) {
             console.error("Error fetching masterclasses:", error);
+            setListState("error");
         }
     }
 
@@ -465,7 +469,13 @@ const MasterclassManagement = () => {
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
                                         <Label className="py-1">Price *</Label>
-                                        <Input type="number" {...register("price", { required: "Price is required" })} />
+                                        <Input
+                                            type="number"
+                                            {...register("price", {
+                                                required: "Price is required",
+                                                min: { value: 1, message: "Enter a price above 0. For a workshop this is only the fallback; visitors pay the price set in Batches." },
+                                            })}
+                                        />
                                         {errors.price && <p className="text-red-500 text-sm">{errors.price.message}</p>}
                                     </div>
                                     <div>
@@ -606,7 +616,14 @@ const MasterclassManagement = () => {
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        {LANDING_PAGES.map((page) => {
+                        {listState !== "ready" && (
+                            <p className="text-sm text-muted-foreground md:col-span-3" data-testid="landing-links-state">
+                                {listState === "loading"
+                                    ? "Loading the linked courses…"
+                                    : "Could not load the courses, so the links cannot be shown. Refresh the page; if it keeps happening, sign in again."}
+                            </p>
+                        )}
+                        {listState === "ready" && LANDING_PAGES.map((page) => {
                             const linked = courseForPage(page);
                             return (
                                 <div key={page} className="border rounded-md p-3 flex flex-col gap-2" data-testid={`landing-link-${page}`}>

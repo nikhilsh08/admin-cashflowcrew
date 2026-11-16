@@ -176,7 +176,7 @@ const BatchSettingsPage = () => {
       <Card>
         <CardHeader>
           <CardTitle>Cycle</CardTitle>
-          <CardDescription>New batches are created automatically from these defaults. There is no seat limit.</CardDescription>
+          <CardDescription>New batches are created automatically from these defaults. /v20 and /v30 sell 50 seats per batch; /v10 has no seat limit.</CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
@@ -242,7 +242,7 @@ const BatchSettingsPage = () => {
           </div>
           <div>
             <Label className="py-1">Booking closes (hours before Saturday's start)</Label>
-            <Input type="number" min="0" step="0.5" required {...field("closeHoursBefore")} />
+            <Input type="number" min="0" step="1" required {...field("closeHoursBefore")} />
           </div>
           <div>
             <Label className="py-1">Language shown on the page (blank hides it)</Label>

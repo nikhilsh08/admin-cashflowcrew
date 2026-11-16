@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 
 const SERVER = import.meta.env.VITE_SERVER_URL;
 
-type Status = "live" | "no_batch_on_sale" | "course_missing" | "course_unpublished" | "not_sold_in_batches";
+type Status = "live" | "batch_full" | "no_batch_on_sale" | "course_missing" | "course_unpublished" | "not_sold_in_batches";
 
 interface LandingPage {
   key: string;
@@ -29,7 +29,9 @@ interface LandingPage {
     bookingCloseAt: string;
     priceRupees: number;
     paidSeats: number;
-    seatsLeft: number;
+    // Seats per batch on this page; null = no limit (/v10).
+    seatLimit?: number | null;
+    seatsLeft: number | null;
   } | null;
   orders: {
     paid: number;
@@ -55,10 +57,11 @@ interface Tracking {
 // What each status means and what the owner does about it.
 const STATUS: Record<Status, { label: string; tone: "ok" | "warn" | "bad"; fix?: { text: string; to: string } }> = {
   live: { label: "Live, selling", tone: "ok" },
+  batch_full: { label: "Batch full, not selling", tone: "warn", fix: { text: "Open the next batch", to: "/admin/batches" } },
   no_batch_on_sale: { label: "No batch on sale", tone: "warn", fix: { text: "Open a batch", to: "/admin/batches" } },
   course_missing: { label: "No course linked", tone: "bad", fix: { text: "Link a course in Masterclasses", to: "/admin/masterclasses" } },
   course_unpublished: { label: "Course not published", tone: "bad", fix: { text: "Publish the course", to: "/admin/masterclasses" } },
-  not_sold_in_batches: { label: "Course not sold in batches", tone: "bad", fix: { text: "Set 'Sold in batches'", to: "/admin/masterclasses" } },
+  not_sold_in_batches: { label: "Course not sold in batches", tone: "bad", fix: { text: "Link the course to this page again in Masterclasses", to: "/admin/masterclasses" } },
 };
 
 const TONE = {
@@ -168,7 +171,10 @@ const LandingPagesPage = () => {
                         Batch {p.batchOnSale.batchNumber} · Sat {istDate(p.batchOnSale.day1StartAt)} – Sun {istDate(p.batchOnSale.day2StartAt)}, {istTime(p.batchOnSale.day1StartAt)} IST
                       </p>
                       <p>
-                        {inr(p.batchOnSale.priceRupees)} · {p.batchOnSale.paidSeats} booked · {p.batchOnSale.seatsLeft} of 50 left
+                        {inr(p.batchOnSale.priceRupees)} · {p.batchOnSale.paidSeats} booked ·{" "}
+                        {p.batchOnSale.seatsLeft === null || p.batchOnSale.seatsLeft === undefined
+                          ? "no seat limit"
+                          : `${p.batchOnSale.seatsLeft} of ${p.batchOnSale.seatLimit ?? 50} left`}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         Booking closes {istDate(p.batchOnSale.bookingCloseAt)}, {istTime(p.batchOnSale.bookingCloseAt)} IST
