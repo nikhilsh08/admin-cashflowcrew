@@ -122,7 +122,7 @@ const LandingPagesPage = () => {
     <div className="space-y-6 max-w-6xl">
       <div className="flex items-center justify-between gap-4">
         <p className="text-sm text-muted-foreground">
-          Each page is linked to its own course (Masterclasses → Workshop landing page). Dates, time, price and seats come from that course's batch on sale (Batches); a change shows on the page within about a minute.
+          Each page is linked to its own course (Masterclasses → Workshop landing page). Dates, time and price come from that course's batch on sale (Batches); a change shows on the page within about a minute. No page has a seat limit.
         </p>
         <Button variant="outline" size="sm" onClick={load} disabled={loading}>
           <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />

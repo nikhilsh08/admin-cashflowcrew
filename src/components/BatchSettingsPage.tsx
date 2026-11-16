@@ -176,7 +176,7 @@ const BatchSettingsPage = () => {
       <Card>
         <CardHeader>
           <CardTitle>Cycle</CardTitle>
-          <CardDescription>New batches are created automatically from these defaults. /v20 and /v30 sell 50 seats per batch; /v10 has no seat limit.</CardDescription>
+          <CardDescription>New batches are created automatically from these defaults. There is no seat limit on /v10, /v20 or /v30.</CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>

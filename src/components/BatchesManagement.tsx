@@ -232,7 +232,7 @@ const BatchesManagement = () => {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-muted-foreground">
-          A batch is on sale while it is OPEN and before its booking close time. /v20 and /v30 stop selling at 50 paid seats per batch; /v10 has no seat limit.
+          A batch is on sale while it is OPEN and before its booking close time. There is no seat limit on /v10, /v20 or /v30.
         </p>
         <div className="flex flex-wrap gap-2">
           {courses.length > 1 && (
