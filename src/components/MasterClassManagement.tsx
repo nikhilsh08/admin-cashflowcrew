@@ -188,7 +188,11 @@ const MasterclassManagement = () => {
         document.body.removeChild(link);
     };
 
-    const handleCreate = () => {
+    // page: "v10" | "v20" | "v30" when the course is being created for a
+    // workshop landing page (from the "Workshop landing pages" panel). Such a
+    // course starts as a live course, available, and hidden from the main
+    // site's course list (it is sold on its landing page).
+    const handleCreate = (page: string = "") => {
         setEditingMasterclass(null);
         setShowRichContent(false);
         reset({
@@ -196,25 +200,29 @@ const MasterclassManagement = () => {
             subHeading: "",
             description: "",
             content: "",
-            status: "Coming Soon",
+            status: page ? "Available" : "Coming Soon",
             price: 0,
             originalPrice: undefined,
             thumbnail: "",
-            type: "RECORDED",
+            type: page ? "LIVE" : "RECORDED",
             tcCourseId: "",
             tcCourseUrl: "",
             startDate: "",
             maxSeats: undefined,
             categoryId: "",
             staticRoute: "",
-            visibility: "show",
+            visibility: page ? "hide" : "show",
             isPublished: true,
-            useBatches: false,
-            landingPage: "",
+            useBatches: Boolean(page),
+            landingPage: page,
             duration: "",
         });
         setView("form");
     };
+
+    // The three workshop landing pages and the course linked to each.
+    const LANDING_PAGES = ["v10", "v20", "v30"] as const;
+    const courseForPage = (page: string) => masterclasses.find((m) => m.landingPage === page);
 
     const handleEdit = (masterclass: Masterclass) => {
         setEditingMasterclass(masterclass);
@@ -292,7 +300,9 @@ const MasterclassManagement = () => {
                 }
             } catch (error) {
                 console.error("Error creating masterclass:", error);
-                toast.error("Failed to create masterclass. Please try again.");
+                // Show the server's reason, e.g. "/v30 is already linked to ...".
+                const serverMessage = axios.isAxiosError(error) ? error.response?.data?.message : undefined;
+                toast.error(serverMessage || "Failed to create masterclass. Please try again.");
             }
         }
     };
@@ -581,11 +591,53 @@ const MasterclassManagement = () => {
                             Manage all your masterclasses, track registrations, and edit details
                         </p>
                     </div>
-                    <Button onClick={handleCreate} className="flex items-center gap-2">
+                    <Button onClick={() => handleCreate()} className="flex items-center gap-2">
                         <Plus className="h-4 w-4" />
                         Create New Masterclass
                     </Button>
                 </div>
+
+                {/* Workshop landing pages: which course each page sells */}
+                <Card className="mb-6" data-testid="landing-links">
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-base">Workshop landing pages</CardTitle>
+                        <CardDescription>
+                            Each landing page sells one course of its own. Its dates, time and price come from that course's Batches.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        {LANDING_PAGES.map((page) => {
+                            const linked = courseForPage(page);
+                            return (
+                                <div key={page} className="border rounded-md p-3 flex flex-col gap-2" data-testid={`landing-link-${page}`}>
+                                    <div className="flex items-center justify-between gap-2">
+                                        <span className="font-semibold">/{page}</span>
+                                        <Badge className={linked ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}>
+                                            {linked ? 'Linked' : 'No course linked'}
+                                        </Badge>
+                                    </div>
+                                    {linked ? (
+                                        <>
+                                            <p className="text-sm">{linked.title}</p>
+                                            <Button variant="outline" size="sm" className="self-start" onClick={() => handleEdit(linked)}>
+                                                Edit this course
+                                            </Button>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <p className="text-sm text-muted-foreground">
+                                                This page will not open until a course is linked to it.
+                                            </p>
+                                            <Button size="sm" className="self-start" onClick={() => handleCreate(page)}>
+                                                Create course for /{page}
+                                            </Button>
+                                        </>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </CardContent>
+                </Card>
 
                 {/* Stats Cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -652,6 +704,11 @@ const MasterclassManagement = () => {
                                             <Badge className={masterclass.status === 'Available' ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800'}>
                                                 {masterclass.status || 'Status N/A'}
                                             </Badge>
+                                            {masterclass.landingPage && (
+                                                <Badge className="bg-emerald-100 text-emerald-800">
+                                                    Landing page /{masterclass.landingPage}
+                                                </Badge>
+                                            )}
                                         </div>
 
                                         <p className="text-muted-foreground line-clamp-2">
@@ -731,7 +788,7 @@ const MasterclassManagement = () => {
                                 <p className="text-muted-foreground text-center mb-4">
                                     Get started by creating your first masterclass
                                 </p>
-                                <Button onClick={handleCreate} className="flex cursor-pointer items-center gap-2">
+                                <Button onClick={() => handleCreate()} className="flex cursor-pointer items-center gap-2">
                                     <Plus className="h-4 w-4" />
                                     Create Your First Masterclass
                                 </Button>
