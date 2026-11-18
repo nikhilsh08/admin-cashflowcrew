@@ -55,6 +55,42 @@ const emptyForm = (courseId = ""): SettingsForm => ({
   alertEmails: "",
 });
 
+// One saved settings record, as GET /api/admin/batch-settings returns it.
+interface SavedSettings {
+  courseId: string;
+  anchorDay1Date: string;
+  cadenceDays: number;
+  defaultPriceRupees: number;
+  defaultStartTimeIst: string;
+  durationMinutes: number;
+  defaultLanguage?: string | null;
+  closeHoursBefore: number;
+  newBatchStatus: "DRAFT" | "OPEN";
+  futureBatchCount: number;
+  autoCreate: boolean;
+  defaultWhatsappGroupLink?: string | null;
+  defaultSurveyUrl?: string | null;
+  alertEmails?: string[];
+  preview?: Preview[];
+}
+
+const formFromSettings = (s: SavedSettings): SettingsForm => ({
+  courseId: s.courseId,
+  anchorDay1Date: s.anchorDay1Date,
+  cadenceDays: String(s.cadenceDays),
+  defaultPriceRupees: String(s.defaultPriceRupees),
+  defaultStartTimeIst: s.defaultStartTimeIst,
+  durationMinutes: String(s.durationMinutes),
+  defaultLanguage: s.defaultLanguage ?? "",
+  closeHoursBefore: String(s.closeHoursBefore),
+  newBatchStatus: s.newBatchStatus,
+  futureBatchCount: String(s.futureBatchCount),
+  autoCreate: s.autoCreate,
+  defaultWhatsappGroupLink: s.defaultWhatsappGroupLink ?? "",
+  defaultSurveyUrl: s.defaultSurveyUrl ?? "",
+  alertEmails: (s.alertEmails ?? []).join(", "),
+});
+
 const errorMessage = (error: unknown, fallback: string) =>
   (axios.isAxiosError(error) && (error.response?.data?.message as string)) || fallback;
 
@@ -62,37 +98,29 @@ const BatchSettingsPage = () => {
   const [courses, setCourses] = useState<BatchCourse[]>([]);
   const [form, setForm] = useState<SettingsForm>(emptyForm());
   const [preview, setPreview] = useState<Preview[]>([]);
+  const [allSettings, setAllSettings] = useState<SavedSettings[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  const load = useCallback(async () => {
+  // Each course has its own settings: show the chosen course's saved values,
+  // or an empty form when it has none yet.
+  const showCourse = (courseId: string, list: SavedSettings[]) => {
+    const existing = list.find((s) => s.courseId === courseId);
+    setForm(existing ? formFromSettings(existing) : emptyForm(courseId));
+    setPreview(existing?.preview ?? []);
+  };
+
+  const load = useCallback(async (keepCourseId?: string) => {
     setLoading(true);
     try {
       const res = await axios.get(`${SERVER}/api/admin/batch-settings`, { withCredentials: true });
       const courseList: BatchCourse[] = res.data.courses ?? [];
+      const settingsList: SavedSettings[] = res.data.settings ?? [];
       setCourses(courseList);
-      const existing = res.data.settings?.[0];
-      if (existing) {
-        setForm({
-          courseId: existing.courseId,
-          anchorDay1Date: existing.anchorDay1Date,
-          cadenceDays: String(existing.cadenceDays),
-          defaultPriceRupees: String(existing.defaultPriceRupees),
-          defaultStartTimeIst: existing.defaultStartTimeIst,
-          durationMinutes: String(existing.durationMinutes),
-          defaultLanguage: existing.defaultLanguage ?? "",
-          closeHoursBefore: String(existing.closeHoursBefore),
-          newBatchStatus: existing.newBatchStatus,
-          futureBatchCount: String(existing.futureBatchCount),
-          autoCreate: existing.autoCreate,
-          defaultWhatsappGroupLink: existing.defaultWhatsappGroupLink ?? "",
-          defaultSurveyUrl: existing.defaultSurveyUrl ?? "",
-          alertEmails: (existing.alertEmails ?? []).join(", "),
-        });
-        setPreview(existing.preview ?? []);
-      } else {
-        setForm(emptyForm(courseList[0]?.id ?? ""));
-      }
+      setAllSettings(settingsList);
+      // Keep the course being edited; on first load, the first course in the list.
+      const courseId = keepCourseId && courseList.some((c) => c.id === keepCourseId) ? keepCourseId : courseList[0]?.id ?? "";
+      showCourse(courseId, settingsList);
     } catch (error) {
       toast.error(errorMessage(error, "Failed to load batch settings"));
     } finally {
@@ -113,7 +141,7 @@ const BatchSettingsPage = () => {
     e.preventDefault();
     setSaving(true);
     try {
-      const res = await axios.put(
+      await axios.put(
         `${SERVER}/api/admin/batch-settings`,
         {
           courseId: form.courseId,
@@ -133,8 +161,9 @@ const BatchSettingsPage = () => {
         },
         { withCredentials: true },
       );
-      setPreview(res.data.settings?.preview ?? []);
       toast.success("Batch settings saved");
+      // Reload so the saved record for this course is the one shown.
+      await load(form.courseId);
     } catch (error) {
       toast.error(errorMessage(error, "Could not save settings"));
     } finally {
@@ -147,7 +176,7 @@ const BatchSettingsPage = () => {
       <Card>
         <CardHeader>
           <CardTitle>Cycle</CardTitle>
-          <CardDescription>New batches are created automatically from these defaults. There is no seat limit.</CardDescription>
+          <CardDescription>New batches are created automatically from these defaults. There is no seat limit on /v10, /v20 or /v30.</CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
@@ -155,7 +184,7 @@ const BatchSettingsPage = () => {
             <select
               className="w-full border rounded px-3 py-2"
               value={form.courseId}
-              onChange={(e) => setForm((f) => ({ ...f, courseId: e.target.value }))}
+              onChange={(e) => showCourse(e.target.value, allSettings)}
               required
               disabled={loading}
             >
@@ -213,7 +242,7 @@ const BatchSettingsPage = () => {
           </div>
           <div>
             <Label className="py-1">Booking closes (hours before Saturday's start)</Label>
-            <Input type="number" min="0" step="0.5" required {...field("closeHoursBefore")} />
+            <Input type="number" min="0" step="1" required {...field("closeHoursBefore")} />
           </div>
           <div>
             <Label className="py-1">Language shown on the page (blank hides it)</Label>

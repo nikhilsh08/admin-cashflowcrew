@@ -54,7 +54,11 @@ const AppContent: React.FC = () => {
       (error) => {
         const url: string = error?.config?.url ?? "";
         const selfHandled = SELF_HANDLED_401.some((path) => url.endsWith(path));
-        if (error?.response?.status === 401 && !selfHandled) {
+        const status = error?.response?.status;
+        // The admin API answers 403 ("Access denied") when the session has
+        // expired or the account is not an admin: same as 401, back to login.
+        const sessionEnded = status === 401 || (status === 403 && url.includes("/api/admin/"));
+        if (sessionEnded && !selfHandled) {
           dispatch(logout());
           navigate("/", { replace: true });
         }
