@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { DesktopSidebar, MobileSidebar, SidebarProvider, useSidebar } from './AdminSidebar';
@@ -48,7 +48,11 @@ const AdminLayoutContent: React.FC<AdminLayoutProps> = ({ children, title, actio
                 </header>
 
                 <main className="flex-1 space-y-4 sm:space-y-6 p-3 sm:p-4 md:p-6 lg:p-8">
-                    {children}
+                    {/* Screens are loaded on first use (App.tsx): keep the sidebar
+                        and header on screen while one is downloading. */}
+                    <Suspense fallback={<p className="text-sm text-muted-foreground">Loading…</p>}>
+                        {children}
+                    </Suspense>
                 </main>
             </div>
         </div>
