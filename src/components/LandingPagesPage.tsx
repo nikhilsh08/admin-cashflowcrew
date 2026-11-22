@@ -9,10 +9,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 
 const SERVER = import.meta.env.VITE_SERVER_URL;
 
-type Status = "live" | "no_batch_on_sale" | "course_missing" | "course_unpublished" | "not_sold_in_batches";
+type Status = "live" | "batch_full" | "no_batch_on_sale" | "course_missing" | "course_unpublished" | "not_sold_in_batches";
 
 interface LandingPage {
   key: string;
+  // "v10" | "v20" | "v30": the value chosen on the course form.
+  page: string;
   name: string;
   url: string;
   paths: { landing: string; checkout: string; thankYou: string };
@@ -27,7 +29,9 @@ interface LandingPage {
     bookingCloseAt: string;
     priceRupees: number;
     paidSeats: number;
-    seatsLeft: number;
+    // Seats per batch on this page; null = no limit (/v10).
+    seatLimit?: number | null;
+    seatsLeft: number | null;
   } | null;
   orders: {
     paid: number;
@@ -53,10 +57,11 @@ interface Tracking {
 // What each status means and what the owner does about it.
 const STATUS: Record<Status, { label: string; tone: "ok" | "warn" | "bad"; fix?: { text: string; to: string } }> = {
   live: { label: "Live, selling", tone: "ok" },
+  batch_full: { label: "Batch full, not selling", tone: "warn", fix: { text: "Open the next batch", to: "/admin/batches" } },
   no_batch_on_sale: { label: "No batch on sale", tone: "warn", fix: { text: "Open a batch", to: "/admin/batches" } },
-  course_missing: { label: "Course not created", tone: "bad", fix: { text: "Create the course", to: "/admin/masterclasses" } },
+  course_missing: { label: "No course linked", tone: "bad", fix: { text: "Link a course in Masterclasses", to: "/admin/masterclasses" } },
   course_unpublished: { label: "Course not published", tone: "bad", fix: { text: "Publish the course", to: "/admin/masterclasses" } },
-  not_sold_in_batches: { label: "Course not sold in batches", tone: "bad", fix: { text: "Set 'Sold in batches'", to: "/admin/masterclasses" } },
+  not_sold_in_batches: { label: "Course not sold in batches", tone: "bad", fix: { text: "Link the course to this page again in Masterclasses", to: "/admin/masterclasses" } },
 };
 
 const TONE = {
@@ -92,16 +97,21 @@ const LandingPagesPage = () => {
   const [tracking, setTracking] = useState<Tracking | null>(null);
   const [since, setSince] = useState("");
   const [loading, setLoading] = useState(true);
+  // A failed load is shown as a failure, never as "no landing pages".
+  const [loadError, setLoadError] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError("");
     try {
       const res = await axios.get(`${SERVER}/api/admin/landing-pages`, { withCredentials: true });
       setPages(res.data.pages ?? []);
       setTracking(res.data.tracking ?? null);
       setSince(res.data.ordersCountedSince ?? "");
     } catch (error) {
-      toast.error(errorMessage(error, "Failed to load landing pages"));
+      const message = errorMessage(error, "Failed to load landing pages");
+      setLoadError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -117,7 +127,7 @@ const LandingPagesPage = () => {
     <div className="space-y-6 max-w-6xl">
       <div className="flex items-center justify-between gap-4">
         <p className="text-sm text-muted-foreground">
-          The three workshop pages. Dates, price and seats come from the batch on sale (Batches); a change shows on the page within about a minute.
+          Each page is linked to its own course (Masterclasses → Workshop landing page). Dates, time and price come from that course's batch on sale (Batches); a change shows on the page within about a minute. No page has a seat limit.
         </p>
         <Button variant="outline" size="sm" onClick={load} disabled={loading}>
           <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
@@ -127,7 +137,9 @@ const LandingPagesPage = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {pages.map((p) => {
-          const s = STATUS[p.status];
+          // A status this build does not know (a newer website) is shown as
+          // it is, instead of breaking the screen.
+          const s = STATUS[p.status] ?? { label: String(p.status), tone: "warn" as const };
           return (
             <Card key={p.key} data-testid={`landing-${p.key}`}>
               <CardHeader className="pb-3">
@@ -143,11 +155,17 @@ const LandingPagesPage = () => {
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
                 <div>
-                  <p className="text-muted-foreground">Course</p>
-                  <p>{p.course ? p.course.title : <em>Not found (slug {p.key.startsWith("mmf") ? "master-mutual-funds-invest-smarter" : "master-personal-finance-with-ai"})</em>}</p>
+                  <p className="text-muted-foreground">Linked course</p>
+                  <p>
+                    {p.course ? (
+                      p.course.title
+                    ) : (
+                      <em>None. Create or edit a course and set "Workshop landing page" to /{p.page}.</em>
+                    )}
+                  </p>
                   {p.sharesCourseWith.length > 0 && (
-                    <p className="text-xs text-muted-foreground">
-                      Same course and batches as {p.sharesCourseWith.map(nameOf).join(", ")}: seats are shared.
+                    <p className="text-xs text-red-700">
+                      Also linked to {p.sharesCourseWith.map(nameOf).join(", ")}. Each page should have its own course.
                     </p>
                   )}
                 </div>
@@ -160,7 +178,10 @@ const LandingPagesPage = () => {
                         Batch {p.batchOnSale.batchNumber} · Sat {istDate(p.batchOnSale.day1StartAt)} – Sun {istDate(p.batchOnSale.day2StartAt)}, {istTime(p.batchOnSale.day1StartAt)} IST
                       </p>
                       <p>
-                        {inr(p.batchOnSale.priceRupees)} · {p.batchOnSale.paidSeats} booked · {p.batchOnSale.seatsLeft} of 50 left
+                        {inr(p.batchOnSale.priceRupees)} · {p.batchOnSale.paidSeats} booked ·{" "}
+                        {p.batchOnSale.seatsLeft === null || p.batchOnSale.seatsLeft === undefined
+                          ? "no seat limit"
+                          : `${p.batchOnSale.seatsLeft} of ${p.batchOnSale.seatLimit ?? 50} left`}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         Booking closes {istDate(p.batchOnSale.bookingCloseAt)}, {istTime(p.batchOnSale.bookingCloseAt)} IST
@@ -193,7 +214,12 @@ const LandingPagesPage = () => {
             </Card>
           );
         })}
-        {!loading && pages.length === 0 && <p className="text-sm text-muted-foreground">No landing pages returned.</p>}
+        {!loading && loadError && (
+          <p role="alert" className="text-sm text-red-700 lg:col-span-3">
+            Could not load the landing pages: {loadError}. Check that you are signed in and that the website is running, then press Refresh.
+          </p>
+        )}
+        {!loading && !loadError && pages.length === 0 && <p className="text-sm text-muted-foreground">No landing pages returned.</p>}
       </div>
 
       {since && (
@@ -207,7 +233,7 @@ const LandingPagesPage = () => {
           <CardHeader>
             <CardTitle className="text-base">Tracking on all three pages</CardTitle>
             <CardDescription>
-              Set in the website's environment variables (Vercel). The same tags load on every landing, checkout and thank-you page.
+              Set in the environment variables of the website's host (Render or Vercel). The same tags load on every landing, checkout and thank-you page; each page's events carry its own course ID.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">

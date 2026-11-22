@@ -158,6 +158,20 @@ export const checkAdminAuth =
     }
   };
 
+// Log out: end the session on the server first (the session cookie is
+// httpOnly, so only the server can clear it), then clear the panel's own
+// state. The panel is always signed out locally, even when the call fails
+// (offline, or a site build that does not have this endpoint yet).
+export const logoutAdmin =
+  () => async (dispatch: AppDispatch): Promise<void> => {
+    try {
+      await axios.post(`${SERVER_URL}/api/admin/logout`, null, { withCredentials: true });
+    } catch {
+      // Nothing to show: the local sign-out below still happens.
+    }
+    dispatch(adminSlice.actions.logout());
+  };
+
 export const { loginStart, loginSuccess, loginFailure, logout, clearError } =
   adminSlice.actions;
 

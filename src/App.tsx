@@ -1,5 +1,5 @@
 // App.tsx
-import React, { useEffect } from "react";
+import React, { Suspense, lazy, useEffect } from "react";
 import { Route, BrowserRouter as Router, Routes, useNavigate } from "react-router-dom";
 import { Provider, useDispatch } from 'react-redux';
 import axios from "axios";
@@ -8,25 +8,33 @@ import { store } from './_authContext/store';
 import type { AppDispatch, RootState } from './_authContext/store';
 import { checkAdminAuth, logout } from './_authContext/slice';
 import { useSelector } from "react-redux";
-import Users from "./components/Users";
-import MasterclassManagement from "./components/MasterClassManagement";
 import { Toaster } from "sonner";
-import CouponsManagement from "./components/CouponsManagement";
-import CategoryManagement from "./components/CategoryManagement";
-import Dashboard from "./components/Dashboard/Dashboard";
-import EmailTemplate from "./components/EmailTemplate";
-import OrderDetails from "./components/OrderDetails";
-import ImageManagement from "./components/ImageManagement";
-import BlogsManagement from "./components/BlogsManagement";
-import BlogFormPage from "./components/BlogFormPage";
-import BundleManagement from "./components/BundleManagement";
 import RequireAdmin from "./components/RequireAdmin";
-import BatchesManagement from "./components/BatchesManagement";
-import GuestList from "./components/GuestList";
-import BatchSettingsPage from "./components/BatchSettingsPage";
-import LandingPagesPage from "./components/LandingPagesPage";
-
 import AdminLayout from "./components/AdminLayout";
+
+// Each screen is downloaded the first time it is opened, so the login page
+// does not load the blog editor, the charts and every other screen up front.
+const Users = lazy(() => import("./components/Users"));
+const MasterclassManagement = lazy(() => import("./components/MasterClassManagement"));
+const CouponsManagement = lazy(() => import("./components/CouponsManagement"));
+const CategoryManagement = lazy(() => import("./components/CategoryManagement"));
+const Dashboard = lazy(() => import("./components/Dashboard/Dashboard"));
+const EmailTemplate = lazy(() => import("./components/EmailTemplate"));
+const OrderDetails = lazy(() => import("./components/OrderDetails"));
+const ImageManagement = lazy(() => import("./components/ImageManagement"));
+const BlogsManagement = lazy(() => import("./components/BlogsManagement"));
+const BlogFormPage = lazy(() => import("./components/BlogFormPage"));
+const BundleManagement = lazy(() => import("./components/BundleManagement"));
+const BatchesManagement = lazy(() => import("./components/BatchesManagement"));
+const GuestList = lazy(() => import("./components/GuestList"));
+const BatchSettingsPage = lazy(() => import("./components/BatchSettingsPage"));
+const LandingPagesPage = lazy(() => import("./components/LandingPagesPage"));
+
+// Shown for screens that have no layout of their own to keep on screen
+// (dashboard, blog editor) while they download.
+const ScreenLoading: React.FC = () => (
+  <div className="min-h-screen flex items-center justify-center text-gray-500">Loading…</div>
+);
 
 const HomePage: React.FC = () => {
   return (
@@ -54,7 +62,11 @@ const AppContent: React.FC = () => {
       (error) => {
         const url: string = error?.config?.url ?? "";
         const selfHandled = SELF_HANDLED_401.some((path) => url.endsWith(path));
-        if (error?.response?.status === 401 && !selfHandled) {
+        const status = error?.response?.status;
+        // The admin API answers 403 ("Access denied") when the session has
+        // expired or the account is not an admin: same as 401, back to login.
+        const sessionEnded = status === 401 || (status === 403 && url.includes("/api/admin/"));
+        if (sessionEnded && !selfHandled) {
           dispatch(logout());
           navigate("/", { replace: true });
         }
@@ -65,7 +77,7 @@ const AppContent: React.FC = () => {
   }, [dispatch, navigate]);
 
   return (
-    <>
+    <Suspense fallback={<ScreenLoading />}>
       <Routes>
         <Route path="/" element={<HomePage />} />
         <Route path="/admin/dashboard" element={
@@ -172,7 +184,7 @@ const AppContent: React.FC = () => {
           </RequireAdmin>
         } />
       </Routes>
-    </>
+    </Suspense>
   );
 };
 
