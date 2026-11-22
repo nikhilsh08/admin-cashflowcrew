@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
-import { render, screen, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import axios from "axios";
 import LandingPagesPage from "../components/LandingPagesPage";
@@ -48,6 +48,31 @@ const data = {
 };
 
 describe("LandingPagesPage", () => {
+  afterEach(() => {
+    cleanup();
+    vi.mocked(axios.get).mockReset();
+  });
+
+  it("says the load failed, not that there are no landing pages, when the request fails", async () => {
+    vi.mocked(axios.get).mockRejectedValue(new Error("Network Error"));
+    render(<MemoryRouter><LandingPagesPage /></MemoryRouter>);
+
+    const alert = await screen.findByRole("alert");
+    expect(alert.textContent).toContain("Could not load the landing pages");
+    expect(screen.queryByText("No landing pages returned.")).toBeNull();
+  });
+
+  it("shows a status it does not know as text instead of breaking the screen", async () => {
+    vi.mocked(axios.get).mockResolvedValue({
+      data: { ...data, pages: [{ ...data.pages[1], status: "paused" }] },
+    });
+    render(<MemoryRouter><LandingPagesPage /></MemoryRouter>);
+
+    const v20 = await screen.findByTestId("landing-mpf-v20");
+    expect(within(v20).getByText("paused")).toBeTruthy();
+    expect(within(v20).getByText("Master Personal Finance with AI")).toBeTruthy();
+  });
+
   it("shows the three pages, each with its own linked course, status, sales and tracking", async () => {
     vi.mocked(axios.get).mockResolvedValue({ data });
     render(<MemoryRouter><LandingPagesPage /></MemoryRouter>);

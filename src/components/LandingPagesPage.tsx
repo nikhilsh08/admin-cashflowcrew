@@ -97,16 +97,21 @@ const LandingPagesPage = () => {
   const [tracking, setTracking] = useState<Tracking | null>(null);
   const [since, setSince] = useState("");
   const [loading, setLoading] = useState(true);
+  // A failed load is shown as a failure, never as "no landing pages".
+  const [loadError, setLoadError] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError("");
     try {
       const res = await axios.get(`${SERVER}/api/admin/landing-pages`, { withCredentials: true });
       setPages(res.data.pages ?? []);
       setTracking(res.data.tracking ?? null);
       setSince(res.data.ordersCountedSince ?? "");
     } catch (error) {
-      toast.error(errorMessage(error, "Failed to load landing pages"));
+      const message = errorMessage(error, "Failed to load landing pages");
+      setLoadError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -132,7 +137,9 @@ const LandingPagesPage = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {pages.map((p) => {
-          const s = STATUS[p.status];
+          // A status this build does not know (a newer website) is shown as
+          // it is, instead of breaking the screen.
+          const s = STATUS[p.status] ?? { label: String(p.status), tone: "warn" as const };
           return (
             <Card key={p.key} data-testid={`landing-${p.key}`}>
               <CardHeader className="pb-3">
@@ -207,7 +214,12 @@ const LandingPagesPage = () => {
             </Card>
           );
         })}
-        {!loading && pages.length === 0 && <p className="text-sm text-muted-foreground">No landing pages returned.</p>}
+        {!loading && loadError && (
+          <p role="alert" className="text-sm text-red-700 lg:col-span-3">
+            Could not load the landing pages: {loadError}. Check that you are signed in and that the website is running, then press Refresh.
+          </p>
+        )}
+        {!loading && !loadError && pages.length === 0 && <p className="text-sm text-muted-foreground">No landing pages returned.</p>}
       </div>
 
       {since && (
@@ -221,7 +233,7 @@ const LandingPagesPage = () => {
           <CardHeader>
             <CardTitle className="text-base">Tracking on all three pages</CardTitle>
             <CardDescription>
-              Set in the website's environment variables (Vercel). The same tags load on every landing, checkout and thank-you page.
+              Set in the environment variables of the website's host (Render or Vercel). The same tags load on every landing, checkout and thank-you page; each page's events carry its own course ID.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
