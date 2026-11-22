@@ -2,8 +2,8 @@ import React from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { DesktopSidebar, MobileSidebar, SidebarProvider, useSidebar } from './AdminSidebar';
-import type { RootState } from '@/_authContext/store';
-import { logout } from '@/_authContext/slice';
+import type { AppDispatch, RootState } from '@/_authContext/store';
+import { logoutAdmin } from '@/_authContext/slice';
 
 interface AdminLayoutProps {
     children: React.ReactNode;
@@ -13,13 +13,13 @@ interface AdminLayoutProps {
 
 const AdminLayoutContent: React.FC<AdminLayoutProps> = ({ children, title, actions }) => {
     const { collapsed } = useSidebar();
-    const dispatch = useDispatch();
+    const dispatch = useDispatch<AppDispatch>();
     const navigate = useNavigate();
     const { user } = useSelector((state: RootState) => state.admin);
 
-    const handleLogout = () => {
+    const handleLogout = async () => {
         localStorage.removeItem('authjs.csrf-token');
-        dispatch(logout());
+        await dispatch(logoutAdmin());
         navigate('/');
     };
 

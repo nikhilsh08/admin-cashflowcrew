@@ -6,6 +6,8 @@ import {
   loginFailure,
   loginStart,
   loginSuccess,
+  logout,
+  logoutAdmin,
 } from "../_authContext/slice";
 
 vi.mock("axios");
@@ -50,6 +52,36 @@ describe("checkAdminAuth (M1)", () => {
     await checkAdminAuth()(dispatch);
 
     expect(dispatch).toHaveBeenLastCalledWith(loginFailure(""));
+  });
+});
+
+describe("logoutAdmin", () => {
+  const dispatch = vi.fn();
+
+  beforeEach(() => {
+    dispatch.mockReset();
+    vi.mocked(axios.post).mockReset();
+  });
+
+  it("ends the session on the server with the cookie, then signs out locally", async () => {
+    vi.mocked(axios.post).mockResolvedValue({ data: { success: true } });
+
+    await logoutAdmin()(dispatch);
+
+    expect(axios.post).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/admin\/logout$/),
+      null,
+      expect.objectContaining({ withCredentials: true }),
+    );
+    expect(dispatch).toHaveBeenLastCalledWith(logout());
+  });
+
+  it("still signs out locally when the server call fails", async () => {
+    vi.mocked(axios.post).mockRejectedValue({ response: { status: 404 } });
+
+    await logoutAdmin()(dispatch);
+
+    expect(dispatch).toHaveBeenLastCalledWith(logout());
   });
 });
 

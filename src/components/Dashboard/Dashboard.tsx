@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Label } from '@/components/ui/label';
 import axios from 'axios';
-import { logout } from '@/_authContext/slice';
+import { logout, logoutAdmin } from '@/_authContext/slice';
 import type { Transaction } from '@/hooks/__types';
 import { DesktopSidebar, MobileSidebar, SidebarProvider, useSidebar } from '../AdminSidebar';
 import type { Masterclass } from '@/hooks/__types';
@@ -46,9 +46,9 @@ type DashboardData = {
 const DashboardContent: React.FC<DashboardProps> = ({ admin, loader, dispatch, navigate }) => {
   const { collapsed } = useSidebar();
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     localStorage.removeItem('authjs.csrf-token');
-    dispatch(logout());
+    await dispatch(logoutAdmin());
     navigate?.('/');
   };
 
