@@ -23,6 +23,10 @@ interface SettingsForm {
   defaultPriceRupees: string;
   defaultStartTimeIst: string;
   durationMinutes: string;
+  // Day 2 of each new batch: days after day 1, its start time and its length.
+  day2OffsetDays: string;
+  defaultDay2StartTimeIst: string;
+  day2DurationMinutes: string;
   defaultLanguage: string;
   closeHoursBefore: string;
   newBatchStatus: "DRAFT" | "OPEN";
@@ -36,6 +40,8 @@ interface SettingsForm {
 interface Preview {
   date: string;
   text: string;
+  // Day 2 of that batch ("Wednesday, 9 December 2026").
+  day2Text?: string;
 }
 
 const emptyForm = (courseId = ""): SettingsForm => ({
@@ -45,6 +51,9 @@ const emptyForm = (courseId = ""): SettingsForm => ({
   defaultPriceRupees: "",
   defaultStartTimeIst: "19:00",
   durationMinutes: "120",
+  day2OffsetDays: "1",
+  defaultDay2StartTimeIst: "19:00",
+  day2DurationMinutes: "120",
   defaultLanguage: "",
   closeHoursBefore: "24",
   newBatchStatus: "DRAFT",
@@ -63,6 +72,10 @@ interface SavedSettings {
   defaultPriceRupees: number;
   defaultStartTimeIst: string;
   durationMinutes: number;
+  // Null or absent: day 2 is the day after day 1, at day 1's time, for day 1's length.
+  day2OffsetDays?: number | null;
+  defaultDay2StartTimeIst?: string | null;
+  day2DurationMinutes?: number | null;
   defaultLanguage?: string | null;
   closeHoursBefore: number;
   newBatchStatus: "DRAFT" | "OPEN";
@@ -81,6 +94,9 @@ const formFromSettings = (s: SavedSettings): SettingsForm => ({
   defaultPriceRupees: String(s.defaultPriceRupees),
   defaultStartTimeIst: s.defaultStartTimeIst,
   durationMinutes: String(s.durationMinutes),
+  day2OffsetDays: String(s.day2OffsetDays ?? 1),
+  defaultDay2StartTimeIst: s.defaultDay2StartTimeIst ?? s.defaultStartTimeIst,
+  day2DurationMinutes: String(s.day2DurationMinutes ?? s.durationMinutes),
   defaultLanguage: s.defaultLanguage ?? "",
   closeHoursBefore: String(s.closeHoursBefore),
   newBatchStatus: s.newBatchStatus,
@@ -137,6 +153,17 @@ const BatchSettingsPage = () => {
     onChange: (e: React.ChangeEvent<HTMLInputElement>) => setForm((f) => ({ ...f, [key]: e.target.value })),
   });
 
+  // Day 1's start time and length. Day 2 follows each of them for as long as
+  // it still matches day 1; once day 2 has its own value, that value stays.
+  const day1Field = (key: "defaultStartTimeIst" | "durationMinutes") => ({
+    value: form[key],
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) =>
+      setForm((f) => {
+        const day2Key = key === "defaultStartTimeIst" ? "defaultDay2StartTimeIst" : "day2DurationMinutes";
+        return { ...f, [key]: e.target.value, ...(f[day2Key] === f[key] ? { [day2Key]: e.target.value } : {}) };
+      }),
+  });
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -150,6 +177,10 @@ const BatchSettingsPage = () => {
           defaultPriceRupees: Number(form.defaultPriceRupees),
           defaultStartTimeIst: form.defaultStartTimeIst,
           durationMinutes: Number(form.durationMinutes),
+          // Day 2 of each new batch: days after day 1, start time, length.
+          day2OffsetDays: Number(form.day2OffsetDays),
+          defaultDay2StartTimeIst: form.defaultDay2StartTimeIst,
+          day2DurationMinutes: Number(form.day2DurationMinutes),
           defaultLanguage: form.defaultLanguage.trim() || null,
           closeHoursBefore: Number(form.closeHoursBefore),
           newBatchStatus: form.newBatchStatus,
@@ -233,12 +264,25 @@ const BatchSettingsPage = () => {
             <Input type="number" min="1" step="1" required {...field("defaultPriceRupees")} />
           </div>
           <div>
-            <Label className="py-1">Start time (IST)</Label>
-            <Input type="time" required {...field("defaultStartTimeIst")} />
+            <Label className="py-1">Day 1 start time (IST)</Label>
+            <Input type="time" required {...day1Field("defaultStartTimeIst")} />
           </div>
           <div>
-            <Label className="py-1">Duration per day (minutes)</Label>
-            <Input type="number" min="30" step="15" required {...field("durationMinutes")} />
+            <Label className="py-1">Day 1 length (minutes)</Label>
+            <Input type="number" min="30" step="15" required {...day1Field("durationMinutes")} />
+          </div>
+          {/* Day 2 of each new batch. 1 day after day 1 = the next day. */}
+          <div>
+            <Label className="py-1">Day 2 is this many days after day 1</Label>
+            <Input type="number" min="1" max="90" step="1" required data-testid="day2-offset" {...field("day2OffsetDays")} />
+          </div>
+          <div>
+            <Label className="py-1">Day 2 start time (IST)</Label>
+            <Input type="time" required data-testid="day2-time" {...field("defaultDay2StartTimeIst")} />
+          </div>
+          <div>
+            <Label className="py-1">Day 2 length (minutes)</Label>
+            <Input type="number" min="30" step="15" required data-testid="day2-length" {...field("day2DurationMinutes")} />
           </div>
           <div>
             <Label className="py-1">Booking closes (hours before day 1 starts)</Label>
@@ -266,12 +310,12 @@ const BatchSettingsPage = () => {
       {preview.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Next batches on this cycle (day 1)</CardTitle>
+            <CardTitle>Next batches on this cycle (day 1 and day 2)</CardTitle>
           </CardHeader>
           <CardContent>
-            <ul className="list-disc pl-5 text-sm">
+            <ul className="list-disc pl-5 text-sm" data-testid="cycle-preview">
               {preview.map((p) => (
-                <li key={p.date}>{p.text}</li>
+                <li key={p.date}>{p.day2Text ? `${p.text} and ${p.day2Text}` : p.text}</li>
               ))}
             </ul>
           </CardContent>

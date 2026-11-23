@@ -6,6 +6,7 @@ import { ExternalLink, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { daysBetweenYmd, istYmd } from "@/lib/istFormat";
 
 const SERVER = import.meta.env.VITE_SERVER_URL;
 
@@ -73,8 +74,24 @@ const TONE = {
 const inr = (n: number) => "₹" + new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 }).format(n);
 const istDate = (iso: string) =>
   new Intl.DateTimeFormat("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short" }).format(new Date(iso));
+const istWeekday = (iso: string) =>
+  new Intl.DateTimeFormat("en-IN", { timeZone: "Asia/Kolkata", weekday: "short" }).format(new Date(iso));
 const istTime = (iso: string) =>
   new Intl.DateTimeFormat("en-IN", { timeZone: "Asia/Kolkata", hour: "numeric", minute: "2-digit" }).format(new Date(iso));
+
+// The two days of the batch on sale, each with its own weekday:
+//   "Sat 21 Nov – Sun 22 Nov, 10:00 am IST"                      two days in a row, one start time
+//   "Sat 21 Nov and Sat 28 Nov, 10:00 am IST"                    not in a row
+//   "Sat 21 Nov, 10:00 am IST and Wed 25 Nov, 7:00 pm IST"       each day at its own time
+const batchDaysLine = (day1Iso: string, day2Iso: string) => {
+  const day1 = `${istWeekday(day1Iso)} ${istDate(day1Iso)}`;
+  const day2 = `${istWeekday(day2Iso)} ${istDate(day2Iso)}`;
+  const time1 = istTime(day1Iso);
+  const time2 = istTime(day2Iso);
+  if (time1 !== time2) return `${day1}, ${time1} IST and ${day2}, ${time2} IST`;
+  const inARow = daysBetweenYmd(istYmd(day1Iso), istYmd(day2Iso)) === 1;
+  return `${day1} ${inARow ? "–" : "and"} ${day2}, ${time1} IST`;
+};
 
 const errorMessage = (error: unknown, fallback: string) =>
   (axios.isAxiosError(error) && (error.response?.data?.message as string)) || fallback;
@@ -175,7 +192,7 @@ const LandingPagesPage = () => {
                   {p.batchOnSale ? (
                     <>
                       <p>
-                        Batch {p.batchOnSale.batchNumber} · Sat {istDate(p.batchOnSale.day1StartAt)} – Sun {istDate(p.batchOnSale.day2StartAt)}, {istTime(p.batchOnSale.day1StartAt)} IST
+                        Batch {p.batchOnSale.batchNumber} · {batchDaysLine(p.batchOnSale.day1StartAt, p.batchOnSale.day2StartAt)}
                       </p>
                       <p>
                         {inr(p.batchOnSale.priceRupees)} · {p.batchOnSale.paidSeats} booked ·{" "}
