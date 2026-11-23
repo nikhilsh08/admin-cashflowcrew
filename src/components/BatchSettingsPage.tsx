@@ -194,7 +194,7 @@ const BatchSettingsPage = () => {
             </select>
           </div>
           <div>
-            <Label className="py-1">First Saturday the cycle counts from</Label>
+            <Label className="py-1">Day 1 of the first batch (any day of the week)</Label>
             <Input type="date" required {...field("anchorDay1Date")} />
           </div>
           <div>
@@ -241,7 +241,7 @@ const BatchSettingsPage = () => {
             <Input type="number" min="30" step="15" required {...field("durationMinutes")} />
           </div>
           <div>
-            <Label className="py-1">Booking closes (hours before Saturday's start)</Label>
+            <Label className="py-1">Booking closes (hours before day 1 starts)</Label>
             <Input type="number" min="0" step="1" required {...field("closeHoursBefore")} />
           </div>
           <div>
@@ -266,7 +266,7 @@ const BatchSettingsPage = () => {
       {preview.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>Next Saturdays on this cycle</CardTitle>
+            <CardTitle>Next batches on this cycle (day 1)</CardTitle>
           </CardHeader>
           <CardContent>
             <ul className="list-disc pl-5 text-sm">

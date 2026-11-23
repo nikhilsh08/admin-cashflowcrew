@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "./ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
-import { istDate, istDateTime, rupees } from "@/lib/istFormat";
+import { batchDaysText, istDate, istDateTime, rupees } from "@/lib/istFormat";
 
 const SERVER = import.meta.env.VITE_SERVER_URL;
 
@@ -272,7 +272,7 @@ const BatchesManagement = () => {
               <TableRow>
                 <TableHead>#</TableHead>
                 <TableHead>Course</TableHead>
-                <TableHead>Saturday</TableHead>
+                <TableHead>Day 1</TableHead>
                 <TableHead>Booking closes</TableHead>
                 <TableHead>Start (IST)</TableHead>
                 <TableHead>Language</TableHead>
@@ -362,8 +362,14 @@ const BatchesManagement = () => {
             )}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <Label className="py-1">Saturday (day 1)</Label>
+                <Label className="py-1">Day 1 date (any day of the week)</Label>
                 <Input type="date" required {...field("day1Date")} />
+                {/* Day 2 is always the day after day 1: show both, with their weekdays. */}
+                {batchDaysText(form.day1Date) && (
+                  <p className="pt-1 text-xs text-muted-foreground" data-testid="batch-days">
+                    {batchDaysText(form.day1Date)}
+                  </p>
+                )}
               </div>
               <div>
                 <Label className="py-1">Start time (IST)</Label>
@@ -388,19 +394,19 @@ const BatchesManagement = () => {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label className="py-1">Zoho webinar key — Saturday</Label>
+                <Label className="py-1">Zoho webinar key — day 1</Label>
                 <Input {...field("zohoWebinarKeyDay1")} />
               </div>
               <div>
-                <Label className="py-1">Zoho webinar key — Sunday</Label>
+                <Label className="py-1">Zoho webinar key — day 2</Label>
                 <Input {...field("zohoWebinarKeyDay2")} />
               </div>
               <div>
-                <Label className="py-1">Zoho instance id — Saturday (recurring only)</Label>
+                <Label className="py-1">Zoho instance id — day 1 (recurring only)</Label>
                 <Input {...field("zohoInstanceIdDay1")} />
               </div>
               <div>
-                <Label className="py-1">Zoho instance id — Sunday (recurring only)</Label>
+                <Label className="py-1">Zoho instance id — day 2 (recurring only)</Label>
                 <Input {...field("zohoInstanceIdDay2")} />
               </div>
               <div>

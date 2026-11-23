@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import axios from "axios";
 import BatchesManagement from "../components/BatchesManagement";
@@ -34,6 +34,9 @@ const batch = {
 };
 
 describe("BatchesManagement (spec 8.2)", () => {
+  // Each test starts with an empty screen.
+  afterEach(cleanup);
+
   beforeEach(() => {
     vi.mocked(axios.get).mockImplementation(async (url: string) => {
       if (url.endsWith("/api/admin/batches")) return { data: { batches: [batch] } };
@@ -62,5 +65,37 @@ describe("BatchesManagement (spec 8.2)", () => {
     expect(screen.getByRole("button", { name: "Close" })).toBeTruthy();
     expect(document.body.textContent?.toLowerCase()).not.toContain("seats left");
     expect(document.body.textContent).not.toContain("countdown");
+  });
+
+  it("does not tie a batch to Saturday and Sunday: day 1 can be any day of the week", async () => {
+    render(
+      <MemoryRouter>
+        <BatchesManagement />
+      </MemoryRouter>,
+    );
+    await waitFor(() => expect(screen.getByTestId("batch-row-4")).toBeTruthy());
+
+    // The date column is "Day 1", not "Saturday".
+    expect(screen.getByRole("columnheader", { name: "Day 1" })).toBeTruthy();
+    expect(screen.queryByRole("columnheader", { name: "Saturday" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: /New batch/ }));
+    const dialog = await screen.findByRole("dialog");
+    expect(dialog.textContent).toContain("Day 1 date (any day of the week)");
+    expect(dialog.textContent).toContain("Zoho webinar key — day 1");
+    expect(dialog.textContent).toContain("Zoho webinar key — day 2");
+    expect(dialog.textContent).not.toMatch(/Saturday|Sunday/);
+
+    // 25 November 2026 is a Wednesday: the form says which two days that gives.
+    fireEvent.change(dialog.querySelector('input[type="date"]') as HTMLInputElement, { target: { value: "2026-11-25" } });
+    expect(screen.getByTestId("batch-days").textContent).toBe("Day 1: Wednesday 25 Nov · Day 2: Thursday 26 Nov");
+
+    // The date goes to the website as typed; nothing in the panel moves it to a Saturday.
+    vi.mocked(axios.post).mockResolvedValue({ data: {} });
+    fireEvent.submit(dialog.querySelector("form") as HTMLFormElement);
+    await waitFor(() => expect(axios.post).toHaveBeenCalled());
+    const [url, body] = vi.mocked(axios.post).mock.calls[0];
+    expect(url).toMatch(/\/api\/admin\/batches$/);
+    expect(body).toMatchObject({ courseId: "c1", day1Date: "2026-11-25" });
   });
 });
