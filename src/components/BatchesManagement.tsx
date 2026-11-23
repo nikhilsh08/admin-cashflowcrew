@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "./ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "./ui/table";
-import { batchDaysText, istDate, istDateTime, rupees } from "@/lib/istFormat";
+import { addDaysYmd, batchDaysText, istDate, istDateTime, istHm, istYmd, rupees } from "@/lib/istFormat";
 
 const SERVER = import.meta.env.VITE_SERVER_URL;
 
@@ -23,7 +23,13 @@ export interface AdminBatch {
   day2StartAt: string;
   bookingCloseAt: string;
   durationMinutes: number;
+  // Length of day 2; null or absent = the same as day 1.
+  day2DurationMinutes?: number | null;
   startTimeIst: string;
+  // Day 2 as the website gives it: "Wednesday, 9 December 2026", "2026-12-09", "19:00".
+  day2Text?: string;
+  day2Date?: string;
+  day2StartTimeIst?: string;
   language: string | null;
   priceRupees: number;
   zohoWebinarKeyDay1: string | null;
@@ -57,6 +63,11 @@ interface FormState {
   priceRupees: string;
   closeHoursBefore: string;
   durationMinutes: string;
+  // Day 2 has its own date, start time and length. Each follows day 1 (the
+  // day after, same time, same length) until it is given its own value.
+  day2Date: string;
+  day2StartTimeIst: string;
+  day2DurationMinutes: string;
   language: string;
   zohoWebinarKeyDay1: string;
   zohoWebinarKeyDay2: string;
@@ -73,6 +84,9 @@ const emptyForm = (courseId = ""): FormState => ({
   priceRupees: "",
   closeHoursBefore: "24",
   durationMinutes: "120",
+  day2Date: "",
+  day2StartTimeIst: "19:00",
+  day2DurationMinutes: "120",
   language: "",
   zohoWebinarKeyDay1: "",
   zohoWebinarKeyDay2: "",
@@ -82,19 +96,34 @@ const emptyForm = (courseId = ""): FormState => ({
   surveyUrl: "",
 });
 
-const ymdInIst = (iso: string) =>
-  new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(iso));
+// Day 2 of a batch, as shown in the table and the form.
+const day2TimeOf = (b: AdminBatch) => b.day2StartTimeIst ?? istHm(b.day2StartAt);
+const day2MinutesOf = (b: AdminBatch) => b.day2DurationMinutes ?? b.durationMinutes;
+
+// A change to day 1 in the form. Day 2 follows it (the day after, same time,
+// same length) for as long as day 2 still matches day 1; once day 2 has been
+// given its own date, time or length, that value is left alone.
+const withDay1 = (f: FormState, key: "day1Date" | "startTimeIst" | "durationMinutes", value: string): FormState => {
+  const next = { ...f, [key]: value };
+  if (key === "day1Date" && (f.day2Date === "" || f.day2Date === addDaysYmd(f.day1Date, 1))) next.day2Date = addDaysYmd(value, 1);
+  if (key === "startTimeIst" && f.day2StartTimeIst === f.startTimeIst) next.day2StartTimeIst = value;
+  if (key === "durationMinutes" && f.day2DurationMinutes === f.durationMinutes) next.day2DurationMinutes = value;
+  return next;
+};
 
 const closeHoursOf = (b: AdminBatch) =>
   String(Math.round(((new Date(b.day1StartAt).getTime() - new Date(b.bookingCloseAt).getTime()) / 3_600_000) * 100) / 100);
 
 const formFromBatch = (b: AdminBatch): FormState => ({
   courseId: b.courseId,
-  day1Date: ymdInIst(b.day1StartAt),
+  day1Date: istYmd(b.day1StartAt),
   startTimeIst: b.startTimeIst,
   priceRupees: String(b.priceRupees),
   closeHoursBefore: closeHoursOf(b),
   durationMinutes: String(b.durationMinutes),
+  day2Date: b.day2Date ?? istYmd(b.day2StartAt),
+  day2StartTimeIst: day2TimeOf(b),
+  day2DurationMinutes: String(day2MinutesOf(b)),
   language: b.language ?? "",
   zohoWebinarKeyDay1: b.zohoWebinarKeyDay1 ?? "",
   zohoWebinarKeyDay2: b.zohoWebinarKeyDay2 ?? "",
@@ -165,6 +194,12 @@ const BatchesManagement = () => {
     onChange: (e: React.ChangeEvent<HTMLInputElement>) => setForm((f) => ({ ...f, [key]: e.target.value })),
   });
 
+  // Day 1's date, start time and length: day 2 follows until it has its own.
+  const day1Field = (key: "day1Date" | "startTimeIst" | "durationMinutes") => ({
+    value: form[key],
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => setForm((f) => withDay1(f, key, e.target.value)),
+  });
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -175,6 +210,10 @@ const BatchesManagement = () => {
       priceRupees: Number(form.priceRupees),
       closeHoursBefore: Number(form.closeHoursBefore),
       durationMinutes: Number(form.durationMinutes),
+      // Day 2: its own date, start time and length.
+      day2Date: form.day2Date,
+      day2StartTimeIst: form.day2StartTimeIst,
+      day2DurationMinutes: Number(form.day2DurationMinutes),
       language: textOrNull(form.language),
       zohoWebinarKeyDay1: textOrNull(form.zohoWebinarKeyDay1),
       zohoWebinarKeyDay2: textOrNull(form.zohoWebinarKeyDay2),
@@ -273,8 +312,8 @@ const BatchesManagement = () => {
                 <TableHead>#</TableHead>
                 <TableHead>Course</TableHead>
                 <TableHead>Day 1</TableHead>
+                <TableHead>Day 2</TableHead>
                 <TableHead>Booking closes</TableHead>
-                <TableHead>Start (IST)</TableHead>
                 <TableHead>Language</TableHead>
                 <TableHead>Price</TableHead>
                 <TableHead>Booked</TableHead>
@@ -300,9 +339,16 @@ const BatchesManagement = () => {
                       <span className="ml-1 text-xs text-muted-foreground">{courseById.get(b.courseId)?.landingPath}</span>
                     )}
                   </TableCell>
-                  <TableCell>{b.day1Text || istDate(b.day1StartAt)}</TableCell>
+                  {/* Each day with its own date, start time (IST) and length. */}
+                  <TableCell data-testid={`batch-day1-${b.batchNumber}`}>
+                    {b.day1Text || istDate(b.day1StartAt)}
+                    <div className="text-xs text-muted-foreground whitespace-nowrap">{b.startTimeIst} IST · {b.durationMinutes} min</div>
+                  </TableCell>
+                  <TableCell data-testid={`batch-day2-${b.batchNumber}`}>
+                    {b.day2Text || istDate(b.day2StartAt)}
+                    <div className="text-xs text-muted-foreground whitespace-nowrap">{day2TimeOf(b)} IST · {day2MinutesOf(b)} min</div>
+                  </TableCell>
                   <TableCell className="whitespace-nowrap">{istDateTime(b.bookingCloseAt)}</TableCell>
-                  <TableCell>{b.startTimeIst}</TableCell>
                   <TableCell>{b.language ?? "—"}</TableCell>
                   <TableCell>{rupees(b.priceRupees)}</TableCell>
                   <TableCell>
@@ -360,31 +406,52 @@ const BatchesManagement = () => {
                 </select>
               </div>
             )}
+            {/* Each day has its own date, start time and length. Day 2 is filled
+                in from day 1 (the day after, same time, same length) and can
+                then be changed to any later date, time or length. */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
                 <Label className="py-1">Day 1 date (any day of the week)</Label>
-                <Input type="date" required {...field("day1Date")} />
-                {/* Day 2 is always the day after day 1: show both, with their weekdays. */}
-                {batchDaysText(form.day1Date) && (
-                  <p className="pt-1 text-xs text-muted-foreground" data-testid="batch-days">
-                    {batchDaysText(form.day1Date)}
-                  </p>
-                )}
+                <Input type="date" required {...day1Field("day1Date")} />
               </div>
               <div>
-                <Label className="py-1">Start time (IST)</Label>
-                <Input type="time" required {...field("startTimeIst")} />
+                <Label className="py-1">Day 1 start time (IST)</Label>
+                <Input type="time" required {...day1Field("startTimeIst")} />
               </div>
               <div>
-                <Label className="py-1">Duration per day (minutes)</Label>
-                <Input type="number" min="30" step="15" required {...field("durationMinutes")} />
+                <Label className="py-1">Day 1 length (minutes)</Label>
+                <Input type="number" min="30" step="15" required {...day1Field("durationMinutes")} />
               </div>
+              <div>
+                <Label className="py-1">Day 2 date (any later date)</Label>
+                <Input
+                  type="date"
+                  required
+                  min={addDaysYmd(form.day1Date, 1) || undefined}
+                  data-testid="day2-date"
+                  {...field("day2Date")}
+                />
+              </div>
+              <div>
+                <Label className="py-1">Day 2 start time (IST)</Label>
+                <Input type="time" required data-testid="day2-time" {...field("day2StartTimeIst")} />
+              </div>
+              <div>
+                <Label className="py-1">Day 2 length (minutes)</Label>
+                <Input type="number" min="30" step="15" required data-testid="day2-length" {...field("day2DurationMinutes")} />
+              </div>
+              {/* Both days as the pages will name them, with their weekdays. */}
+              {batchDaysText(form.day1Date, form.day2Date) && (
+                <p className="md:col-span-3 -mt-2 text-xs text-muted-foreground" data-testid="batch-days">
+                  {batchDaysText(form.day1Date, form.day2Date)}
+                </p>
+              )}
               <div>
                 <Label className="py-1">Price (₹, charged as shown)</Label>
                 <Input type="number" min="1" step="1" required {...field("priceRupees")} />
               </div>
               <div>
-                <Label className="py-1">Booking closes (hours before start)</Label>
+                <Label className="py-1">Booking closes (hours before day 1 starts)</Label>
                 <Input type="number" min="0" step="0.5" required {...field("closeHoursBefore")} />
               </div>
               <div>
