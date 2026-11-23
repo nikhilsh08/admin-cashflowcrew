@@ -20,6 +20,7 @@ import {
   Images,
   FileText,
   Package,
+  Globe,
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Button } from './ui/button';
@@ -87,6 +88,21 @@ const navMain = [
     title: "Bundles",
     url: "/admin/bundles",
     icon: Package,
+  },
+  {
+    title: "Landing pages",
+    url: "/admin/landing-pages",
+    icon: Globe,
+  },
+  {
+    title: "Batches",
+    url: "/admin/batches",
+    icon: BarChart3,
+  },
+  {
+    title: "Batch settings",
+    url: "/admin/batch-settings",
+    icon: Settings,
   },
   {
     title: "Categories",

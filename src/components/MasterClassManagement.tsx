@@ -41,6 +41,12 @@ interface Masterclass {
     staticRoute?: string;
     visibility: 'show' | 'hide';
     isPublished?: boolean;
+    // Sold in batches on a workshop landing page; dates and price then come
+    // from Batches / Batch settings.
+    useBatches?: boolean | string;
+    // The workshop landing page this course is linked to: "v10" | "v20" |
+    // "v30", or "" for none. One course per page.
+    landingPage?: string | null;
     seatsSold?: number;
     // Legacy/display fields
     registrations?: number;
@@ -61,6 +67,8 @@ const MasterclassManagement = () => {
     const [view, setView] = useState<"list" | "form">("list");
     const [editingMasterclass, setEditingMasterclass] = useState<Masterclass | null>(null);
     const [masterclasses, setMasterclasses] = useState<Masterclass[]>([]);
+    // Until the list has loaded, nothing is known about which page is linked.
+    const [listState, setListState] = useState<"loading" | "ready" | "error">("loading");
     const [showRichContent, setShowRichContent] = useState(false);
 
     // Waitlist State
@@ -95,11 +103,16 @@ const MasterclassManagement = () => {
             staticRoute: "",
             visibility: "show",
             isPublished: true,
+            useBatches: false,
+            landingPage: "",
             duration: "",
         },
     });
 
     const watchType = watch("type");
+    // A course linked to a landing page is always sold in batches.
+    const watchLandingPage = watch("landingPage") || "";
+    const watchUseBatches = watchLandingPage !== "";
 
     const [categories, setCategories] = useState<Category[]>([]);
 
@@ -123,8 +136,10 @@ const MasterclassManagement = () => {
             const res = await axios.get(`${import.meta.env.VITE_SERVER_URL}/api/admin/masterclass/all-classes`, { withCredentials: true });
             console.log("responsesss", res.data.data) // Verify if data.data or data.courses
             setMasterclasses(res.data.courses || res.data.data || []);
+            setListState("ready");
         } catch (error) {
             console.error("Error fetching masterclasses:", error);
+            setListState("error");
         }
     }
 
@@ -177,7 +192,11 @@ const MasterclassManagement = () => {
         document.body.removeChild(link);
     };
 
-    const handleCreate = () => {
+    // page: "v10" | "v20" | "v30" when the course is being created for a
+    // workshop landing page (from the "Workshop landing pages" panel). Such a
+    // course starts as a live course, available, and hidden from the main
+    // site's course list (it is sold on its landing page).
+    const handleCreate = (page: string = "") => {
         setEditingMasterclass(null);
         setShowRichContent(false);
         reset({
@@ -185,23 +204,29 @@ const MasterclassManagement = () => {
             subHeading: "",
             description: "",
             content: "",
-            status: "Coming Soon",
+            status: page ? "Available" : "Coming Soon",
             price: 0,
             originalPrice: undefined,
             thumbnail: "",
-            type: "RECORDED",
+            type: page ? "LIVE" : "RECORDED",
             tcCourseId: "",
             tcCourseUrl: "",
             startDate: "",
             maxSeats: undefined,
             categoryId: "",
             staticRoute: "",
-            visibility: "show",
+            visibility: page ? "hide" : "show",
             isPublished: true,
+            useBatches: Boolean(page),
+            landingPage: page,
             duration: "",
         });
         setView("form");
     };
+
+    // The three workshop landing pages and the course linked to each.
+    const LANDING_PAGES = ["v10", "v20", "v30"] as const;
+    const courseForPage = (page: string) => masterclasses.find((m) => m.landingPage === page);
 
     const handleEdit = (masterclass: Masterclass) => {
         setEditingMasterclass(masterclass);
@@ -217,7 +242,9 @@ const MasterclassManagement = () => {
 
         reset({
             ...masterclass,
-            startDate: formattedDate
+            startDate: formattedDate,
+            useBatches: Boolean(masterclass.useBatches),
+            landingPage: masterclass.landingPage || "",
         });
         setView("form");
     };
@@ -246,6 +273,9 @@ const MasterclassManagement = () => {
             staticRoute: nullIfEmpty(data.staticRoute),
             visibility: data.visibility || 'show',
             isPublished: typeof data.isPublished === 'string' ? data.isPublished === 'true' : (data.isPublished ?? true),
+            // "none" unlinks; a linked course is always sold in batches.
+            landingPage: data.landingPage || 'none',
+            useBatches: Boolean(data.landingPage),
             duration: (data.type === 'LIVE' || data.type === 'HYBRID') ? (nullIfEmpty(data.duration)) : null,
         };
 
@@ -260,7 +290,8 @@ const MasterclassManagement = () => {
                 }
             } catch (error) {
                 console.error("Error updating masterclass:", error);
-                toast.error("Failed to update masterclass. Please try again.");
+                const serverMessage = axios.isAxiosError(error) ? error.response?.data?.message : undefined;
+                toast.error(serverMessage || "Failed to update masterclass. Please try again.");
             }
         } else {
             // create
@@ -273,7 +304,9 @@ const MasterclassManagement = () => {
                 }
             } catch (error) {
                 console.error("Error creating masterclass:", error);
-                toast.error("Failed to create masterclass. Please try again.");
+                // Show the server's reason, e.g. "/v30 is already linked to ...".
+                const serverMessage = axios.isAxiosError(error) ? error.response?.data?.message : undefined;
+                toast.error(serverMessage || "Failed to create masterclass. Please try again.");
             }
         }
     };
@@ -416,11 +449,33 @@ const MasterclassManagement = () => {
                                     </div>
                                 </div>
 
+                                {/* Link to a workshop landing page: each page (/v10, /v20, /v30) sells its own course. */}
+                                <div>
+                                    <Label className="py-1">Workshop landing page</Label>
+                                    <select {...register("landingPage")} className="w-full border rounded px-3 py-2" data-testid="landing-page-select">
+                                        <option value="">None — normal course</option>
+                                        <option value="v10">/v10 — Master Mutual Funds page</option>
+                                        <option value="v20">/v20 — Master Personal Finance with AI page</option>
+                                        <option value="v30">/v30 — Master Personal Finance with AI page (new design)</option>
+                                    </select>
+                                    <p className="text-sm text-gray-600 mt-1">
+                                        {watchUseBatches
+                                            ? `This course is sold on /${watchLandingPage}. Its dates, time and price come from its own Batches. After saving, fill in Batch settings, add a batch and open it.`
+                                            : "Each landing page is linked to one course of its own. Choose a page to sell this course there."}
+                                    </p>
+                                </div>
+
                                 {/* Price + Original Price */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
                                         <Label className="py-1">Price *</Label>
-                                        <Input type="number" {...register("price", { required: "Price is required" })} />
+                                        <Input
+                                            type="number"
+                                            {...register("price", {
+                                                required: "Price is required",
+                                                min: { value: 1, message: "Enter a price above 0. For a workshop this is only the fallback; visitors pay the price set in Batches." },
+                                            })}
+                                        />
                                         {errors.price && <p className="text-red-500 text-sm">{errors.price.message}</p>}
                                     </div>
                                     <div>
@@ -475,8 +530,8 @@ const MasterclassManagement = () => {
                                 {/* Trainer Central Details */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
-                                        <Label className="py-1">Trainer Central Course ID *</Label>
-                                        <Input {...register("tcCourseId", { required: "TC Course ID is required" })} />
+                                        <Label className="py-1">Trainer Central Course ID{watchUseBatches ? " (not needed for batch courses)" : " *"}</Label>
+                                        <Input {...register("tcCourseId", { validate: (v) => watchUseBatches || !!v || "TC Course ID is required" })} />
                                         {errors.tcCourseId && <p className="text-red-500 text-sm">{errors.tcCourseId.message}</p>}
                                     </div>
                                     <div>
@@ -546,11 +601,60 @@ const MasterclassManagement = () => {
                             Manage all your masterclasses, track registrations, and edit details
                         </p>
                     </div>
-                    <Button onClick={handleCreate} className="flex items-center gap-2">
+                    <Button onClick={() => handleCreate()} className="flex items-center gap-2">
                         <Plus className="h-4 w-4" />
                         Create New Masterclass
                     </Button>
                 </div>
+
+                {/* Workshop landing pages: which course each page sells */}
+                <Card className="mb-6" data-testid="landing-links">
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-base">Workshop landing pages</CardTitle>
+                        <CardDescription>
+                            Each landing page sells one course of its own. Its dates, time and price come from that course's Batches.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        {listState !== "ready" && (
+                            <p className="text-sm text-muted-foreground md:col-span-3" data-testid="landing-links-state">
+                                {listState === "loading"
+                                    ? "Loading the linked courses…"
+                                    : "Could not load the courses, so the links cannot be shown. Refresh the page; if it keeps happening, sign in again."}
+                            </p>
+                        )}
+                        {listState === "ready" && LANDING_PAGES.map((page) => {
+                            const linked = courseForPage(page);
+                            return (
+                                <div key={page} className="border rounded-md p-3 flex flex-col gap-2" data-testid={`landing-link-${page}`}>
+                                    <div className="flex items-center justify-between gap-2">
+                                        <span className="font-semibold">/{page}</span>
+                                        <Badge className={linked ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}>
+                                            {linked ? 'Linked' : 'No course linked'}
+                                        </Badge>
+                                    </div>
+                                    {linked ? (
+                                        <>
+                                            <p className="text-sm">{linked.title}</p>
+                                            <Button variant="outline" size="sm" className="self-start" onClick={() => handleEdit(linked)}>
+                                                Edit this course
+                                            </Button>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <p className="text-sm text-muted-foreground">
+                                                This page will not open until a course is linked to it.
+                                            </p>
+                                            <Button size="sm" className="self-start" onClick={() => handleCreate(page)}>
+                                                Create course for /{page}
+                                            </Button>
+                                        </>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </CardContent>
+                </Card>
 
                 {/* Stats Cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -617,6 +721,11 @@ const MasterclassManagement = () => {
                                             <Badge className={masterclass.status === 'Available' ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800'}>
                                                 {masterclass.status || 'Status N/A'}
                                             </Badge>
+                                            {masterclass.landingPage && (
+                                                <Badge className="bg-emerald-100 text-emerald-800">
+                                                    Landing page /{masterclass.landingPage}
+                                                </Badge>
+                                            )}
                                         </div>
 
                                         <p className="text-muted-foreground line-clamp-2">
@@ -696,7 +805,7 @@ const MasterclassManagement = () => {
                                 <p className="text-muted-foreground text-center mb-4">
                                     Get started by creating your first masterclass
                                 </p>
-                                <Button onClick={handleCreate} className="flex cursor-pointer items-center gap-2">
+                                <Button onClick={() => handleCreate()} className="flex cursor-pointer items-center gap-2">
                                     <Plus className="h-4 w-4" />
                                     Create Your First Masterclass
                                 </Button>

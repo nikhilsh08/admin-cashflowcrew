@@ -23,6 +23,7 @@ interface Coupon {
     minAmount: number;
     maxDiscount?: number | null;
     applicableCourseIds: string[];
+    applicableBatchIds?: string[];
     description?: string;
     isEnabled: boolean;
     createdAt: string;
@@ -34,6 +35,11 @@ interface Course {
     title: string;
 }
 
+interface BatchOption {
+    id: string;
+    label: string;
+}
+
 const CouponManagement = () => {
     const [view, setView] = useState<"list" | "form">("list");
     const [editingCoupon, setEditingCoupon] = useState<Coupon | null>(null);
@@ -41,6 +47,8 @@ const CouponManagement = () => {
     const [courses, setCourses] = useState<Course[]>([]);
     const [isEnabled, setIsEnabled] = useState<boolean>(true);
     const [applicableTo, setApplicableTo] = useState<"all" | "specific">("all");
+    const [batchScope, setBatchScope] = useState<"all" | "specific">("all");
+    const [batches, setBatches] = useState<BatchOption[]>([]);
     const [expiryDate, setExpiryDate] = useState<Date | undefined>(undefined);
 
     const {
@@ -87,9 +95,23 @@ const CouponManagement = () => {
         }
     };
 
+    const getBatches = async () => {
+        try {
+            const res = await axios.get(`${import.meta.env.VITE_SERVER_URL}/api/admin/batches`, { withCredentials: true });
+            const list = res.data.batches || [];
+            setBatches(list.map((b: { id: string; batchNumber: number; day1Text?: string; status: string }) => ({
+                id: b.id,
+                label: `Batch ${b.batchNumber} — ${b.day1Text ?? ""} (${b.status})`,
+            })));
+        } catch (error) {
+            console.error("Error fetching batches:", error);
+        }
+    };
+
     useEffect(() => {
         getCoupons();
         getCourses();
+        getBatches();
     }, []);
 
     const handleCreate = () => {
@@ -108,6 +130,7 @@ const CouponManagement = () => {
         setIsEnabled(true);
         setExpiryDate(undefined);
         setApplicableTo("all");
+        setBatchScope("all");
         setView("form");
     };
 
@@ -117,6 +140,7 @@ const CouponManagement = () => {
         setIsEnabled(coupon.isEnabled);
         setExpiryDate(coupon.expiryDate ? new Date(coupon.expiryDate) : undefined);
         setApplicableTo(coupon.applicableCourseIds && coupon.applicableCourseIds.length > 0 ? "specific" : "all");
+        setBatchScope(coupon.applicableBatchIds && coupon.applicableBatchIds.length > 0 ? "specific" : "all");
         setView("form");
     };
 
@@ -133,7 +157,8 @@ const CouponManagement = () => {
             maxDiscount: data.maxDiscount ? Number(data.maxDiscount) : undefined,
             discount: Number(data.discount),
             minAmount: Number(data.minAmount) || 0,
-            applicableCourseIds: applicableTo === "all" ? [] : (Array.isArray(data.applicableCourseIds) ? data.applicableCourseIds : [])
+            applicableCourseIds: applicableTo === "all" ? [] : (Array.isArray(data.applicableCourseIds) ? data.applicableCourseIds : []),
+            applicableBatchIds: batchScope === "all" ? [] : (Array.isArray(data.applicableBatchIds) ? data.applicableBatchIds : []),
         };
 
         try {
@@ -392,6 +417,39 @@ const CouponManagement = () => {
                                     </div>
                                 </div>
 
+                                {/* Workshop batch scope (empty = every batch) */}
+                                {batches.length > 0 && (
+                                    <div>
+                                        <Label className="py-1">Workshop batches</Label>
+                                        <select
+                                            value={batchScope}
+                                            onChange={(e) => setBatchScope(e.target.value as "all" | "specific")}
+                                            className="w-full border rounded px-3 py-2 mb-2"
+                                        >
+                                            <option value="all">All batches</option>
+                                            <option value="specific">Specific batches only</option>
+                                        </select>
+                                        {batchScope === "specific" && (
+                                            <div className="border rounded-md p-3 max-h-48 overflow-y-auto space-y-2">
+                                                {batches.map(batch => (
+                                                    <div key={batch.id} className="flex items-center space-x-2">
+                                                        <input
+                                                            type="checkbox"
+                                                            id={`batch-${batch.id}`}
+                                                            value={batch.id}
+                                                            {...register("applicableBatchIds")}
+                                                            className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                                                        />
+                                                        <Label htmlFor={`batch-${batch.id}`} className="text-sm font-normal cursor-pointer">
+                                                            {batch.label}
+                                                        </Label>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
                                 {/* Enable/Disable Switch */}
                                 <div className="flex items-center gap-2">
                                     <Switch checked={isEnabled} onCheckedChange={setIsEnabled} />
@@ -531,6 +589,9 @@ const CouponManagement = () => {
                                         <div className="flex flex-wrap items-center gap-4 text-sm">
                                             <span>Type: {coupon.discountType === 'PERCENTAGE' ? 'Percentage' : 'Fixed Amount'}</span>
                                             <span>Applies to: {coupon.applicableCourseIds.length > 0 ? `${coupon.applicableCourseIds.length} Courses` : 'All Courses'}</span>
+                                            {coupon.applicableBatchIds && coupon.applicableBatchIds.length > 0 && (
+                                                <span>Batches: {coupon.applicableBatchIds.length}</span>
+                                            )}
                                             {coupon.maxDiscount && (
                                                 <span>Max discount: ₹{coupon.maxDiscount}</span>
                                             )}

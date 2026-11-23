@@ -1,9 +1,9 @@
-import React from 'react';
+import React, { Suspense } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import { DesktopSidebar, MobileSidebar, SidebarProvider, useSidebar } from './AdminSidebar';
-import type { RootState } from '@/_authContext/store';
-import { logout } from '@/_authContext/slice';
+import type { AppDispatch, RootState } from '@/_authContext/store';
+import { logoutAdmin } from '@/_authContext/slice';
 
 interface AdminLayoutProps {
     children: React.ReactNode;
@@ -13,13 +13,13 @@ interface AdminLayoutProps {
 
 const AdminLayoutContent: React.FC<AdminLayoutProps> = ({ children, title, actions }) => {
     const { collapsed } = useSidebar();
-    const dispatch = useDispatch();
+    const dispatch = useDispatch<AppDispatch>();
     const navigate = useNavigate();
     const { user } = useSelector((state: RootState) => state.admin);
 
-    const handleLogout = () => {
+    const handleLogout = async () => {
         localStorage.removeItem('authjs.csrf-token');
-        dispatch(logout());
+        await dispatch(logoutAdmin());
         navigate('/');
     };
 
@@ -48,7 +48,11 @@ const AdminLayoutContent: React.FC<AdminLayoutProps> = ({ children, title, actio
                 </header>
 
                 <main className="flex-1 space-y-4 sm:space-y-6 p-3 sm:p-4 md:p-6 lg:p-8">
-                    {children}
+                    {/* Screens are loaded on first use (App.tsx): keep the sidebar
+                        and header on screen while one is downloading. */}
+                    <Suspense fallback={<p className="text-sm text-muted-foreground">Loading…</p>}>
+                        {children}
+                    </Suspense>
                 </main>
             </div>
         </div>

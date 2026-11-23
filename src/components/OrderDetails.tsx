@@ -8,6 +8,13 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, Mail, Phone, Calendar, CreditCard, User as UserIcon, BookOpen, Package, TrendingUp, Tag } from 'lucide-react';
 
+// Order.landingSource -> the page's path (site: lib/landing/sources.ts).
+const LANDING_PAGE_PATH: Record<string, string> = {
+    "mmf-v10": "/v10",
+    "mpf-v20": "/v20",
+    "mpf-v30": "/v30",
+};
+
 interface OrderItem {
     id: string;
     price: number;
@@ -69,6 +76,8 @@ interface OrderDetail {
     paymentTransaction: PaymentTransaction | null;
     guestEmail: string | null;
     guestPhone: string | null;
+    // Workshop landing page the order came from ("mmf-v10" | "mpf-v20" | "mpf-v30").
+    landingSource?: string | null;
     // UTM Marketing Attribution
     utmSource: string | null;
     utmMedium: string | null;
@@ -164,6 +173,11 @@ const OrderDetails: React.FC = () => {
                         <div className="flex items-center gap-2 mt-1">
                             <p className="text-sm text-gray-500">ID: {order.orderId || order.id}</p>
                             <Badge variant="secondary" className="text-xs">{productCount} products</Badge>
+                            {order.landingSource && (
+                                <Badge variant="outline" className="text-xs" data-testid="order-landing-page">
+                                    Landing page: {LANDING_PAGE_PATH[order.landingSource] ?? order.landingSource}
+                                </Badge>
+                            )}
                         </div>
                     </div>
                 </div>
